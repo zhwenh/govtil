@@ -1,4 +1,4 @@
-package muxconn
+package govtil
 
 import (
 	"bytes"
@@ -61,44 +61,64 @@ func TestConnection(t *testing.T) {
 
 func TestSplitSender(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	inchannels, err := Split(inconn, 2)
+	inchannels, err := MuxConn(inconn, 2)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
-	in := inchannels[0]
+	in := inchannels[1]
 	defer in.Close()
 
 	sdata := []byte("hello")
 	in.Write(sdata)
+
 	dec := gob.NewDecoder(outconn)
-	var wp wirePacket
-	err = dec.Decode(&wp)
-	if err != nil {
-		t.Error("Split conn read failed")
+	var rchno uint
+	var rdatalen int
+	err = dec.Decode(&rchno)
+	if err != nil || rchno != 1 {
+		t.Error("Split conn chno failed")
 	}
-	if !bytes.Equal(wp.Payload, sdata) {
+	err = dec.Decode(&rdatalen)
+	if err != nil || rdatalen != len(sdata) {
+		t.Error("Split conn rdatalen failed")
+	}
+	rdata := make([]byte, rdatalen)
+	n, err := outconn.Read(rdata)
+	if err != nil || n != len(sdata) {
+		t.Error("Split conn rdata failed")
+	}
+	if !bytes.Equal(rdata, sdata) {
 		t.Error("Split send failed")
 	}
 }
 
 func TestSplitReceiver(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	outchannels, err := Split(outconn, 2)
+	outchannels, err := MuxConn(outconn, 2)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
-	out := outchannels[0]
+	out := outchannels[1]
 
+	chno := uint(1)
 	sdata := []byte("hello")
-	wp := wirePacket{0, sdata}
+	sdatalen := len(sdata)
 	enc := gob.NewEncoder(inconn)
-	err = enc.Encode(&wp)
+	err = enc.Encode(&chno)
 	if err != nil {
-		t.Error("Split conn write failed")
+		t.Error("Split conn write chno failed")
+	}
+	err = enc.Encode(&sdatalen)
+	if err != nil {
+		t.Error("Split conn write sdatalen failed")
+	}
+	n, err := inconn.Write(sdata)
+	if err != nil || n != len(sdata) {
+		t.Error("Split conn write sdata failed")
 	}
 	rdata := make([]byte, len(sdata))
-	out.Read(rdata)
-	if !bytes.Equal(rdata, sdata) {
+	n, err = out.Read(rdata)
+	if n != len(sdata) || err != nil || !bytes.Equal(rdata, sdata) {
 		t.Error("Split receive failed")
 	}
 }
@@ -108,11 +128,11 @@ func TestNMuxes(t *testing.T) {
 	const n = 10000
 
 	inconn, outconn := SelfConnection()
-	ins, err := Split(inconn, n)
+	ins, err := MuxConn(inconn, n)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
-	outs, err := Split(outconn, n)
+	outs, err := MuxConn(outconn, n)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
@@ -148,11 +168,11 @@ func (r *RPCRecv) Echo(in *string, out *string) error {
 
 func TestRPC(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	ins, err := Split(inconn, 2)
+	ins, err := MuxConn(inconn, 2)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
-	outs, err := Split(outconn, 2)
+	outs, err := MuxConn(outconn, 2)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
@@ -174,11 +194,11 @@ func TestRPC(t *testing.T) {
 func TestXRPC(t *testing.T) {
 	var n int = 2
 	inconn, outconn := SelfConnection()
-	ins, err := Split(inconn, n)
+	ins, err := MuxConn(inconn, n)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
-	outs, err := Split(outconn, n)
+	outs, err := MuxConn(outconn, n)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
