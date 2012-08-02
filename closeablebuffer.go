@@ -33,16 +33,21 @@ func (cb *CloseableBuffer) Closed() bool {
 
 // Refined Read() does exactly one of the following:
 // 	1) gets data if there is any in the buffer
-//	2) waits for data if there isn't any, then tries again
-//	3) returns (0, io.EOF) if buffer is closed
+//	2) returns (0, io.EOF) if buffer is closed
+//	3) waits for data if there isn't any, then tries again
 func (cb *CloseableBuffer) Read(data []byte) (n int, err error) {
 	cb.L.Lock()
 	defer cb.L.Unlock()
-	for n, err = cb.buf.Read(data); n == 0 ; {
-		if cb.closed {
-			return 0, io.EOF
+	for {
+		n, err = cb.buf.Read(data)
+		if err == nil {
+			break			// 1) data
+		} else if cb.closed {
+			return 0, io.EOF	// 2) no more, io.EOF
 		}
-		cb.Wait()
+		else {
+			cb.Wait()		// 3) wait for more
+		}
 	}
 	return
 }
