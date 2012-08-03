@@ -35,11 +35,11 @@ func SelfConnection() (net.Conn, net.Conn) {
 
 func MuxPairs(inconn, outconn net.Conn, n int) (ins []*muxConn, outs []*muxConn, err error) {
 	if inconn != nil {
-		ins, err = MuxConn(inconn, n)
+		ins, err = Split(inconn, n)
 		if err != nil { return }
 	}
 	if outconn != nil {
-		outs, err = MuxConn(outconn, n)
+		outs, err = Split(outconn, n)
 		if err != nil { return }
 	}
 	return
@@ -77,7 +77,7 @@ func TestSplitSender(t *testing.T) {
 	defer outconn.Close()
 
 	// Use inconn as a sender
-	inchannels, err := MuxConn(inconn, 2)
+	inchannels, err := Split(inconn, 2)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
@@ -113,7 +113,7 @@ func TestSplitSender(t *testing.T) {
 
 func TestSplitReceiver(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	outchannels, err := MuxConn(outconn, 2)
+	outchannels, err := Split(outconn, 2)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}

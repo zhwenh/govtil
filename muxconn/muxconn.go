@@ -89,7 +89,7 @@ func socketClosed(err error) bool {
 	return false
 }
 
-// MuxConn muxes a network connection into 'n' separate connections. It returns
+// Split muxes a network connection into 'n' separate connections. It returns
 // a slice of 'n' connection proxies and an error.
 //
 // The connection proxies satisfy the net.Conn interface and can be used in
@@ -102,7 +102,7 @@ func socketClosed(err error) bool {
 // If one end is muxed to N proxies and another to M, then the number of valid
 // muxed connections is min(N,M). If a send occurs on muxed connection k where
 // min(N,M) < k <= max(N,M), the receiving end will log.Fatal(...)
-func MuxConn(conn net.Conn, n int) (muxconns []*muxConn, err error) {
+func Split(conn net.Conn, n int) (muxconns []*muxConn, err error) {
 	if n <= 0 {
 		err = errors.New("Invalid number of connections to split into: " + fmt.Sprint(n))
 		return
