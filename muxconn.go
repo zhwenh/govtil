@@ -152,7 +152,7 @@ func MuxConn(conn net.Conn, n int) (muxconns []*muxConn, err error) {
 	// Receive buffers
 	recvbufs := make([]*CloseableBuffer, n)
 	for i := 0; i < n; i++ {
-		recvbufs[i] = NewCloseableBuffer()
+		recvbufs[i] = NewCloseableBuffer(MAX_BUFFER_SIZE)
 	}
 
 	// Receive pump

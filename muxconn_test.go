@@ -4,6 +4,7 @@ import (
 	"bytes"
 //	"govtil/dlog"
 	"encoding/gob"
+	"errors"
 	"log"
 	"net"
 	"net/rpc"
@@ -187,6 +188,24 @@ func (r *RPCRecv) Echo(in *string, out *string) error {
 	return nil
 }
 
+// Spawn RPC servers and return clients
+func SetupRPC(ins, outs []*muxConn) (ret []*rpc.Client, err error) {
+	if len(ins) != len(outs) {
+		err = errors.New("len(ins) and len(outs) must match")
+		return
+	}
+	recv := new(RPCRecv)
+	for _,in := range ins {
+		srv := rpc.NewServer()
+		srv.Register(recv)
+		go srv.ServeConn(in)
+	}
+	for _,out := range outs {
+		ret = append(ret, rpc.NewClient(out))
+	}
+	return ret, nil
+}
+
 func TestRPC(t *testing.T) {
 	inconn, outconn := SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, 2)
@@ -305,5 +324,41 @@ func TestRPCDropServerConn(t *testing.T) {
 	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
 	if err == nil {
 		t.Error("RPC call on closed MuxConn server did not fail")
+	}
+}
+
+// Stress buffers and flow control
+func TestRPCBigData(t *testing.T) {
+	var plen int
+	if testing.Short() {
+		plen = 1024				// 1 kB
+	} else {
+		plen = 10 * 1024 * 1024	// 10 MB
+	}
+
+	payloadbytes := make([]byte, plen)
+	for i := 0; i < len(payloadbytes); i++ {
+		payloadbytes[i] = byte(i)
+	}
+	payload := string(payloadbytes)
+
+	inconn, outconn := SelfConnection()
+	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	if err != nil {
+		t.Fatal("MuxPairs failed: ", err)
+	}
+	clients, _ := SetupRPC(ins, outs)
+	success := make(chan bool)
+	for _,client := range clients {
+		go func() {
+			rpayload := ""
+			client.Call("RPCRecv.Echo", &payload, &rpayload)
+			success <- rpayload == payload
+		}()
+	}
+	for _ = range clients {
+		if !<-success {
+			t.Fatal("Bigdata failed")
+		}
 	}
 }
