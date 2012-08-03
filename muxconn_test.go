@@ -32,8 +32,19 @@ func SelfConnection() (net.Conn, net.Conn) {
 	return inconn, outconn
 }
 
+func MuxPairs(inconn, outconn net.Conn, n int) (ins []*muxConn, outs []*muxConn, err error) {
+	if inconn != nil {
+		ins, err = MuxConn(inconn, n)
+		if err != nil { return }
+	}
+	if outconn != nil {
+		outs, err = MuxConn(outconn, n)
+		if err != nil { return }
+	}
+	return
+}
+
 func TestConnection(t *testing.T) {
-	// test connection
 	inconn, outconn := SelfConnection()
 	defer inconn.Close()
 	defer outconn.Close()
@@ -58,14 +69,13 @@ func TestConnection(t *testing.T) {
 	if rstr != sstr {
 		t.Error("Encoder over socket failed")
 	}
-
 }
 
 func TestSplitSender(t *testing.T) {
 	inconn, outconn := SelfConnection()
 	defer outconn.Close()
 
-	// Split inconn, and use as a sender
+	// Use inconn as a sender
 	inchannels, err := MuxConn(inconn, 2)
 	if err != nil {
 		t.Error("Split failed: ", err)
@@ -143,13 +153,9 @@ func TestNMuxes(t *testing.T) {
 	}
 
 	inconn, outconn := SelfConnection()
-	ins, err := MuxConn(inconn, n)
+	ins, outs, err := MuxPairs(inconn, outconn, n)
 	if err != nil {
-		t.Error("Split failed: ", err)
-	}
-	outs, err := MuxConn(outconn, n)
-	if err != nil {
-		t.Error("Split failed: ", err)
+		t.Fatal("MuxPairs failed: ", err)
 	}
 	
 	// in --> out
@@ -183,13 +189,9 @@ func (r *RPCRecv) Echo(in *string, out *string) error {
 
 func TestRPC(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	ins, err := MuxConn(inconn, 2)
+	ins, outs, err := MuxPairs(inconn, outconn, 2)
 	if err != nil {
-		t.Error("Split failed: ", err)
-	}
-	outs, err := MuxConn(outconn, 2)
-	if err != nil {
-		t.Error("Split failed: ", err)
+		t.Error("MuxPairs failed: ", err)
 	}
 	recv := new(RPCRecv)
 	rpc.Register(recv)
@@ -207,15 +209,10 @@ func TestRPC(t *testing.T) {
 }
 
 func TestXRPC(t *testing.T) {
-	var n int = 2
 	inconn, outconn := SelfConnection()
-	ins, err := MuxConn(inconn, n)
+	ins, outs, err := MuxPairs(inconn, outconn, 2)
 	if err != nil {
-		t.Error("Split failed: ", err)
-	}
-	outs, err := MuxConn(outconn, n)
-	if err != nil {
-		t.Error("Split failed: ", err)
+		t.Error("MuxPairs failed: ", err)
 	}
 
 	type pair struct {
@@ -223,18 +220,18 @@ func TestXRPC(t *testing.T) {
 		Out net.Conn
 	}
 
-	pairs := make([]pair, n)
-	for i := 0; i < int(n); i++ {
-		pairs[i].In = ins[i]
-		pairs[i].Out = outs[i]
-	}
+	pairs := make([]pair, 2)
+	pairs[0].In = ins[0]
+	pairs[1].In = ins[1]
+	pairs[0].Out = outs[0]
+	pairs[1].Out = outs[1]
 
 	for _,p := range pairs {
 		if p.In.LocalAddr().String() != p.Out.RemoteAddr().String() {
-			t.Error("Address mismatch: ", p.In.LocalAddr(), " and ", p.Out.RemoteAddr())
+			t.Error("Address mismatch: ", p.In.LocalAddr(), " != ", p.Out.RemoteAddr())
 		}
 		if p.In.RemoteAddr().String() != p.Out.LocalAddr().String() {
-			t.Error("Address mismatch: ", p.In.RemoteAddr(), " and ", p.Out.LocalAddr())
+			t.Error("Address mismatch: ", p.In.RemoteAddr(), " != ", p.Out.LocalAddr())
 		}
 	}
 
@@ -258,5 +255,55 @@ func TestXRPC(t *testing.T) {
 	<-call1.Done
 	if sdata1 != rdata1 || sdata2 != rdata2 {
 		t.Error("XRPC failed")
+	}
+}
+
+func TestRPCDropClientConn(t *testing.T) {
+	inconn, outconn := SelfConnection()
+	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	if err != nil {
+		t.Fatal("MuxPairs failed: ", err)
+	}
+
+	srv := rpc.NewServer()
+	srv.Register(new(RPCRecv))
+	go srv.ServeConn(ins[0])
+	client := rpc.NewClient(outs[0])
+	sdata := "abc"
+	rdata := ""
+	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
+	if err != nil {
+		t.Error("Regular RPC call failed: ", err)
+	}
+
+	outconn.Close()
+	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
+	if err == nil {
+		t.Error("RPC call on closed MuxConn client did not fail")
+	}
+}
+
+func TestRPCDropServerConn(t *testing.T) {
+	inconn, outconn := SelfConnection()
+	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	if err != nil {
+		t.Error("MuxPairs failed: ", err)
+	}
+
+	srv := rpc.NewServer()
+	srv.Register(new(RPCRecv))
+	go srv.ServeConn(ins[0])
+	client := rpc.NewClient(outs[0])
+	sdata := "abc"
+	rdata := ""
+	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
+	if err != nil {
+		t.Error("Regular RPC call failed: ", err)
+	}
+
+	inconn.Close()
+	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
+	if err == nil {
+		t.Error("RPC call on closed MuxConn server did not fail")
 	}
 }

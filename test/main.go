@@ -4,18 +4,18 @@ import (
 	"govtil/dlog"
 	"flag"
 	"testing"
-	"govtil"
+//	"govtil"
 )
 
 func testMain() {
 	var tests = []testing.InternalTest{
-		{"TestConnection", govtil.TestConnection},
+/*		{"TestConnection", govtil.TestConnection},
 		{"TestSplitSender", govtil.TestSplitSender},
 		{"TestSplitReceiver", govtil.TestSplitReceiver},
 		{"TestNMuxes", govtil.TestNMuxes},
 		{"TestRPC", govtil.TestRPC},
 		{"TestXRPC", govtil.TestXRPC},
-	}
+*/	}
 
 	flag.Set("test.test", "Test*")
 	dlog.SetDebug(true)

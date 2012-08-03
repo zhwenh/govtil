@@ -119,30 +119,33 @@ func MuxConn(conn net.Conn, n int) (muxconns []*muxConn, err error) {
 
 	// Send pump
 	go func() {
+		defer conn.Close()
 		enc := gob.NewEncoder(conn)
+		var err error = nil
 		for {
 			sp, ok := <-sendch
-			if !ok { // signal from closer
-				conn.Close()
-				return
+			if !ok { return } // closed, no more
+
+			if err != nil {
+				// already got a socket send error, so reply with that same
+				// error
+				sp.err <- err
+				continue
 			}
-			// Send in exactly this order:
+
+			// Send in order:
 			//  1. Channel number
 			//  2. Payload length
 			//  3. Payload
-			if err := enc.Encode(sp.chno); err != nil {
-				log.Fatal("error encoding chno: ", sp.chno)
+			if err = enc.Encode(sp.chno); err != nil {
 				sp.err <- err
-			}
-			if err := enc.Encode(len(sp.payload)); err != nil {
-				log.Fatal("error encoding len(payload): ", sp.chno)
+			} else if err = enc.Encode(len(sp.payload)); err != nil {
 				sp.err <- err
-			}
-			if err := enc.Encode(sp.payload); err != nil {
-				log.Fatal("error encoding payload: ", sp.payload)
+			} else if err = enc.Encode(sp.payload); err != nil {
 				sp.err <- err
+			} else {
+				sp.err <- nil
 			}
-			sp.err <- nil
 		}
 	}()
 	
@@ -163,8 +166,11 @@ func MuxConn(conn net.Conn, n int) (muxconns []*muxConn, err error) {
 
 		dec := gob.NewDecoder(conn)
 		for {
+			// Receive in order:
+			//  1. Channel number
+			//  2. Payload length
+			//  3. Payload
 			var chno uint
-			var plen int
 			err := dec.Decode(&chno)
 			if err != nil {
 				return
@@ -172,6 +178,7 @@ func MuxConn(conn net.Conn, n int) (muxconns []*muxConn, err error) {
 			if int(chno) >= n {
 				log.Fatal("muxconn: Receive got invalid mux channel ", chno) 
 			}
+			var plen int
 			err = dec.Decode(&plen)
 			if err != nil {
 				return
