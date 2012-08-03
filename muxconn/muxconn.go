@@ -4,13 +4,13 @@
 // as general as n-way muxing here). The codec would implement both the
 // ServerCodec and ClientCodec interfaces in the same object.
 
-package govtil
+package muxconn
 
 import (
-//	"govtil/dlog"
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"govtil/closeablebuffer"
 	"io"
 	"log"
 	"net"
@@ -35,7 +35,7 @@ type muxConn struct {
 	remoteaddr net.Addr
 	sendch   chan sendPacket
 	closewaiter *sync.WaitGroup
-	recvbuf  *CloseableBuffer
+	recvbuf  io.ReadWriteCloser
 }
 
 func (cp *muxConn) Write(data []byte) (n int, err error) {
@@ -150,9 +150,9 @@ func MuxConn(conn net.Conn, n int) (muxconns []*muxConn, err error) {
 	}()
 	
 	// Receive buffers
-	recvbufs := make([]*CloseableBuffer, n)
+	recvbufs := make([]io.ReadWriteCloser, n)
 	for i := 0; i < n; i++ {
-		recvbufs[i] = NewCloseableBuffer(MAX_BUFFER_SIZE)
+		recvbufs[i] = closeablebuffer.New(MAX_BUFFER_SIZE)
 	}
 
 	// Receive pump

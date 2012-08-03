@@ -1,4 +1,4 @@
-package govtil
+package closeablebuffer
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ type CloseableBuffer struct {
 	maxlen int
 }
 
-func NewCloseableBuffer(m int) *CloseableBuffer {
+func New(m int) *CloseableBuffer {
 	mutex := sync.Mutex{}
 	return &CloseableBuffer{buf: &bytes.Buffer{},
 							closed: false,
@@ -28,11 +28,12 @@ func NewCloseableBuffer(m int) *CloseableBuffer {
 }
 
 // After Close() is called, Read() and Write() will fail with err == io.EOF
-func (cb *CloseableBuffer) Close() {
+func (cb *CloseableBuffer) Close() error {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
 	cb.closed = true
 	cb.buf.Reset()
+	return nil
 }
 
 func (cb *CloseableBuffer) Closed() bool {
