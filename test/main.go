@@ -1,6 +1,7 @@
 package main
 
 import (
+	"govtil/dlog"
 	"flag"
 	"testing"
 	"govtil"
@@ -15,7 +16,9 @@ func testMain() {
 		{"TestRPC", govtil.TestRPC},
 		{"TestXRPC", govtil.TestXRPC},
 	}
+
 	flag.Set("test.test", "Test*")
+	dlog.SetDebug(true)
 	testing.Main(func(string, string) (bool, error) { return true, nil },
 		tests,
 		[]testing.InternalBenchmark{},

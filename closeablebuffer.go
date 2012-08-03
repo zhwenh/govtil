@@ -23,6 +23,7 @@ func (cb *CloseableBuffer) Close() {
 	cb.L.Lock()
 	defer cb.L.Unlock()
 	cb.closed = true
+	cb.buf.Reset()
 }
 
 func (cb *CloseableBuffer) Closed() bool {
@@ -44,8 +45,7 @@ func (cb *CloseableBuffer) Read(data []byte) (n int, err error) {
 			break			// 1) data
 		} else if cb.closed {
 			return 0, io.EOF	// 2) no more, io.EOF
-		}
-		else {
+		} else {
 			cb.Wait()		// 3) wait for more
 		}
 	}

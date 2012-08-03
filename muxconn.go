@@ -7,6 +7,7 @@
 package govtil
 
 import (
+//	"govtil/dlog"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -129,14 +130,17 @@ func MuxConn(conn net.Conn, n int) (muxconns []*muxConn, err error) {
 			//  1. Channel number
 			//  2. Payload length
 			//  3. Payload
-			send_sequence := []interface{}{sp.chno, len(sp.payload), sp.payload}
-			for item := range send_sequence {
-				err := enc.Encode(item)
-				if err != nil {
-					log.Fatal("error encoding: ", err, " (", item, ")")
-					sp.err <- err
-					break
-				}
+			if err := enc.Encode(sp.chno); err != nil {
+				log.Fatal("error encoding chno: ", sp.chno)
+				sp.err <- err
+			}
+			if err := enc.Encode(len(sp.payload)); err != nil {
+				log.Fatal("error encoding len(payload): ", sp.chno)
+				sp.err <- err
+			}
+			if err := enc.Encode(sp.payload); err != nil {
+				log.Fatal("error encoding payload: ", sp.payload)
+				sp.err <- err
 			}
 			sp.err <- nil
 		}
@@ -173,7 +177,7 @@ func MuxConn(conn net.Conn, n int) (muxconns []*muxConn, err error) {
 				return
 			}
 			payload := make([]byte, plen)
-			_, err = conn.Read(payload)
+			err = dec.Decode(&payload)
 			if err != nil {
 				return
 			}

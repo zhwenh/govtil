@@ -2,6 +2,7 @@ package govtil
 
 import (
 	"bytes"
+//	"govtil/dlog"
 	"encoding/gob"
 	"log"
 	"net"
@@ -13,8 +14,7 @@ import (
 func SelfConnection() (net.Conn, net.Conn) {
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		log.Println(err)
-		log.Fatal("Could not set up listen")
+		log.Fatal("Could not set up listen: ", err)
 	}
 	defer listener.Close()
 
@@ -35,6 +35,8 @@ func SelfConnection() (net.Conn, net.Conn) {
 func TestConnection(t *testing.T) {
 	// test connection
 	inconn, outconn := SelfConnection()
+	defer inconn.Close()
+	defer outconn.Close()
 	data := make([]byte, 2)
 	data[0] = 0
 	data[1] = 1
@@ -61,15 +63,21 @@ func TestConnection(t *testing.T) {
 
 func TestSplitSender(t *testing.T) {
 	inconn, outconn := SelfConnection()
+	defer outconn.Close()
+
+	// Split inconn, and use as a sender
 	inchannels, err := MuxConn(inconn, 2)
 	if err != nil {
 		t.Error("Split failed: ", err)
 	}
 	in := inchannels[1]
-	defer in.Close()
+	defer inchannels[0].Close()
 
 	sdata := []byte("hello")
-	in.Write(sdata)
+	go func() {
+		in.Write(sdata)
+		in.Close()
+	}()
 
 	dec := gob.NewDecoder(outconn)
 	var rchno uint
@@ -83,12 +91,12 @@ func TestSplitSender(t *testing.T) {
 		t.Error("Split conn rdatalen failed")
 	}
 	rdata := make([]byte, rdatalen)
-	n, err := outconn.Read(rdata)
-	if err != nil || n != len(sdata) {
+	err = dec.Decode(&rdata)
+	if err != nil {
 		t.Error("Split conn rdata failed")
 	}
 	if !bytes.Equal(rdata, sdata) {
-		t.Error("Split send failed")
+		t.Error("Split send failed: ", sdata, " != ", rdata)
 	}
 }
 
@@ -104,28 +112,35 @@ func TestSplitReceiver(t *testing.T) {
 	sdata := []byte("hello")
 	sdatalen := len(sdata)
 	enc := gob.NewEncoder(inconn)
-	err = enc.Encode(&chno)
-	if err != nil {
-		t.Error("Split conn write chno failed")
-	}
-	err = enc.Encode(&sdatalen)
-	if err != nil {
-		t.Error("Split conn write sdatalen failed")
-	}
-	n, err := inconn.Write(sdata)
-	if err != nil || n != len(sdata) {
-		t.Error("Split conn write sdata failed")
-	}
+	go func() {
+		err := enc.Encode(chno)
+		if err != nil {
+			t.Error("Split conn write chno failed")
+		}
+		err = enc.Encode(sdatalen)
+		if err != nil {
+			t.Error("Split conn write sdatalen failed")
+		}
+		err = enc.Encode(sdata)
+		if err != nil {
+			t.Error("Split conn write sdata failed")
+		}
+	}()
 	rdata := make([]byte, len(sdata))
-	n, err = out.Read(rdata)
+	n, err := out.Read(rdata)
 	if n != len(sdata) || err != nil || !bytes.Equal(rdata, sdata) {
-		t.Error("Split receive failed")
+		t.Error("Split receive failed: ", rdata)
 	}
 }
 
 // Stress test with many muxes
 func TestNMuxes(t *testing.T) {
-	const n = 10000
+	var n int
+	if testing.Short() {
+		n = 100
+	} else {
+		n = 10000
+	}
 
 	inconn, outconn := SelfConnection()
 	ins, err := MuxConn(inconn, n)
