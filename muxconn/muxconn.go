@@ -10,7 +10,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"govtil/closeablebuffer"
+	"github.com/vsekhar/govtil/closeablebuffer"
 	"io"
 	"log"
 	"net"
