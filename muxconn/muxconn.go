@@ -40,13 +40,12 @@ func (mc *muxConn) Write(data []byte) (n int, err error) {
 	enc := gob.NewEncoder(mc.conn)
 	for len(data) > 0 {
 		func() {
-			// always put something back for other writers
+			// get a token to claim access to the underlying connection
+			err = <-mc.writeErrCh
 			defer func() {
 				mc.writeErrCh <- err
 			}()
-			
-			// get a token to claim access to the underlying connection
-			err = <-mc.writeErrCh
+
 			if err != nil {
 				// short circuit if we've seen an error on this connection
 				data = nil // stop loop
