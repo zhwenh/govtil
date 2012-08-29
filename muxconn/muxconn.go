@@ -141,6 +141,13 @@ func socketClosed(err error) bool {
 // If one end is muxed to N proxies and another to M, then the number of valid
 // muxed connections is min(N,M). If a send occurs on muxed connection k where
 // min(N,M) < k <= max(N,M), the receiving end will log.Fatal(...)
+//
+// Muxed connections are not buffered, therefore if data arrives on the
+// underlying connection for channel 0, that data must be read by muxconn[0]
+// before any other data will be read from the underlying connection. Muxed
+// connections should only be used when the read rates across muxed channels do
+// not vastly differ, in order ensure fast channels are not starved waiting for
+// slow ones.
 func Split(conn net.Conn, n int) (muxconns []net.Conn, err error) {
 	if n <= 0 {
 		err = errors.New("Invalid number of connections to split into: " + fmt.Sprint(n))
