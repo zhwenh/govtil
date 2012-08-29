@@ -5,6 +5,7 @@ import (
 //	"govtil/dlog"
 	"encoding/gob"
 	"errors"
+	"io"
 	"log"
 	"net"
 	"net/rpc"
@@ -141,6 +142,34 @@ func TestSplitReceiver(t *testing.T) {
 	n, err := out.Read(rdata)
 	if n != len(sdata) || err != nil || !bytes.Equal(rdata, sdata) {
 		t.Error("Split receive failed: ", rdata)
+	}
+}
+
+func TestClose(t *testing.T) {
+	inconn, outconn := SelfConnection()
+	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	if err != nil {
+		t.Fatal("MuxPairs failed: ", err)
+	}
+
+	// Close one mux, should be able to read from the other
+	ins[0].Close()
+	sdata := []byte{11,23,5}
+	go func() {
+		ins[1].Write(sdata)
+	}()
+	rdata := make([]byte, 3)
+	outs[1].Read(rdata)
+	if !bytes.Equal(sdata, rdata) {
+		t.Error("Half-closed connection: bytes don't match")
+	}
+
+	// Close other mux, reads should return io.EOF
+	ins[1].Close()
+	_, err0 := ins[0].Read(rdata)
+	_, err1 := ins[1].Read(rdata)
+	if err0 != io.EOF || err1 != io.EOF {
+		t.Error("Bad error codes on closed muxed conn:", err0, err1)
 	}
 }
 
