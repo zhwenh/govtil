@@ -31,6 +31,12 @@ type muxConn struct {
 }
 
 func (mc *muxConn) Write(data []byte) (n int, err error) {
+	defer func() {
+		if socketClosed(err) {
+			err = io.EOF
+		}
+	}()
+
 	enc := gob.NewEncoder(mc.conn)
 	for len(data) > 0 {
 		func() {
@@ -70,7 +76,14 @@ func (mc *muxConn) Write(data []byte) (n int, err error) {
 }
 
 func (mc *muxConn) Read(data []byte) (n int, err error) {
-	return mc.readPipe.Read(data)
+	defer func() {
+		if socketClosed(err) {
+			err = io.EOF
+		}
+	}()
+
+	n, err = mc.readPipe.Read(data)
+	return
 }
 
 func (mc *muxConn) Close() error {
@@ -101,6 +114,9 @@ func (*muxConn) SetWriteDeadline(time.Time) error {
 // Return whether the given error indicates a socket that produced it has been
 // closed by the other end
 func socketClosed(err error) bool {
+	if err == nil {
+		return false
+	}
 	// TODO: update this with additional checks
 	// TODO: replace this with a check for net.errClosing when/if it's public
 	if err == io.EOF ||
