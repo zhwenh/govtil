@@ -1,7 +1,7 @@
 package main
 
 import (
-	"govtil/dlog"
+	"github.com/vsekhar/govtil/dlog"
 	"flag"
 	"testing"
 //	"govtil"

@@ -33,7 +33,7 @@ func SelfConnection() (net.Conn, net.Conn) {
 	return inconn, outconn
 }
 
-func MuxPairs(inconn, outconn net.Conn, n int) (ins []*muxConn, outs []*muxConn, err error) {
+func MuxPairs(inconn, outconn net.Conn, n int) (ins []net.Conn, outs []net.Conn, err error) {
 	if inconn != nil {
 		ins, err = Split(inconn, n)
 		if err != nil { return }
@@ -189,7 +189,7 @@ func (r *RPCRecv) Echo(in *string, out *string) error {
 }
 
 // Spawn RPC servers and return clients
-func SetupRPC(ins, outs []*muxConn) (ret []*rpc.Client, err error) {
+func SetupRPC(ins, outs []net.Conn) (ret []*rpc.Client, err error) {
 	if len(ins) != len(outs) {
 		err = errors.New("len(ins) and len(outs) must match")
 		return

@@ -1,16 +1,11 @@
 // Muxer
 
-// Also try implementing a Codec that does this (but only 2 way, not
-// as general as n-way muxing here). The codec would implement both the
-// ServerCodec and ClientCodec interfaces in the same object.
-
 package muxconn
 
 import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/vsekhar/govtil/closeablebuffer"
 	"io"
 	"log"
 	"net"
@@ -19,9 +14,7 @@ import (
 	"time"
 )
 
-const (
-	MAX_BUFFER_SIZE = 8192 // bytes
-)
+const defaultBufSize = 4096
 
 type sendPacket struct {
 	chno    uint
@@ -30,39 +23,67 @@ type sendPacket struct {
 }
 
 type muxConn struct {
-	chno     uint
-	localaddr net.Addr
-	remoteaddr net.Addr
-	sendch   chan sendPacket
-	closewaiter *sync.WaitGroup
-	recvbuf  io.ReadWriteCloser
+	conn		net.Conn
+	chno		uint
+	writeErrCh	chan error
+	readPipe	*io.PipeReader
+	closewaiter	*sync.WaitGroup
 }
 
-func (cp *muxConn) Write(data []byte) (n int, err error) {
-	errch := make(chan error)
-	cp.sendch <- sendPacket{cp.chno, data, errch}
-	err = <-errch
-	if err == nil {
-		n = len(data)
+func (mc *muxConn) Write(data []byte) (n int, err error) {
+	enc := gob.NewEncoder(mc.conn)
+	for len(data) > 0 {
+		func() {
+			// always put something back for other writers
+			defer func() {
+				mc.writeErrCh <- err
+			}()
+			
+			// get a token to claim access to the underlying connection
+			err = <-mc.writeErrCh
+			if err != nil {
+				// short circuit if we've seen an error on this connection
+				data = nil // stop loop
+				return
+			}
+			
+			// write at most a fixed amount (additional data will have to wait
+			// for the next loop iteration)
+			to_write := defaultBufSize
+			if len(data) < to_write {
+				to_write = len(data)
+			}
+			if err = enc.Encode(mc.chno); err != nil {
+				return
+			}
+			if err = enc.Encode(to_write); err != nil {
+				return
+			}
+			if err = enc.Encode(data[:to_write]); err != nil {
+				return
+			}
+			n += to_write
+			data = data[to_write:]
+		}()
 	}
 	return
 }
 
-func (cp *muxConn) Read(data []byte) (n int, err error) {
-	return cp.recvbuf.Read(data)
+func (mc *muxConn) Read(data []byte) (n int, err error) {
+	return mc.readPipe.Read(data)
 }
 
-func (cp *muxConn) Close() error {
-	cp.closewaiter.Done()
+func (mc *muxConn) Close() error {
+	mc.closewaiter.Done()
 	return nil
 }
 
-func (cp *muxConn) LocalAddr() net.Addr {
-	return cp.localaddr
+func (mc *muxConn) LocalAddr() net.Addr {
+	return mc.conn.LocalAddr()
 }
 
-func (cp *muxConn) RemoteAddr() net.Addr {
-	return cp.remoteaddr
+func (mc *muxConn) RemoteAddr() net.Addr {
+	return mc.conn.RemoteAddr()
 }
 
 func (*muxConn) SetDeadline(time.Time) error {
@@ -102,76 +123,42 @@ func socketClosed(err error) bool {
 // If one end is muxed to N proxies and another to M, then the number of valid
 // muxed connections is min(N,M). If a send occurs on muxed connection k where
 // min(N,M) < k <= max(N,M), the receiving end will log.Fatal(...)
-func Split(conn net.Conn, n int) (muxconns []*muxConn, err error) {
+func Split(conn net.Conn, n int) (muxconns []net.Conn, err error) {
 	if n <= 0 {
 		err = errors.New("Invalid number of connections to split into: " + fmt.Sprint(n))
 		return
 	}
-	sendch := make(chan sendPacket)
-
-	// Closer
+	
+	writeErrCh := make(chan error, 1)	// buffered, acts as a mutex
+	writeErrCh <- nil					// prime with the first token
+	pipeReaders := make([]*io.PipeReader, n)
+	pipeWriters := make([]*io.PipeWriter, n)
+	for i := 0; i < n; i++ {
+		pipeReaders[i], pipeWriters[i] = io.Pipe()
+	}
 	var closewaiter sync.WaitGroup
 	closewaiter.Add(n)
+	
+	// closer
 	go func() {
 		closewaiter.Wait()
-		close(sendch) // signal to send pump
-	}()
-
-	// Send pump
-	go func() {
-		defer conn.Close()
-		enc := gob.NewEncoder(conn)
-		var err error = nil
-		for {
-			sp, ok := <-sendch
-			if !ok { return } // closed, no more
-
-			if err != nil {
-				// already got a socket send error, so reply with that same
-				// error
-				sp.err <- err
-				continue
-			}
-
-			// Send in order:
-			//  1. Channel number
-			//  2. Payload length
-			//  3. Payload
-			if err = enc.Encode(sp.chno); err != nil {
-				sp.err <- err
-			} else if err = enc.Encode(len(sp.payload)); err != nil {
-				sp.err <- err
-			} else if err = enc.Encode(sp.payload); err != nil {
-				sp.err <- err
-			} else {
-				sp.err <- nil
-			}
-		}
+		conn.Close()
 	}()
 	
-	// Receive buffers
-	recvbufs := make([]io.ReadWriteCloser, n)
-	for i := 0; i < n; i++ {
-		recvbufs[i] = closeablebuffer.New(MAX_BUFFER_SIZE)
-	}
-
-	// Receive pump
+	// read pump
 	go func() {
-		// Close all receiving buffers to signal to readers that no more is coming
+		var err error = nil
 		defer func() {
-			for _, buf := range recvbufs {
-				buf.Close()
+			for _,writer := range pipeWriters {
+				writer.CloseWithError(err)
 			}
 		}()
-
+		
+		buffer := make([]byte, defaultBufSize)
 		dec := gob.NewDecoder(conn)
 		for {
-			// Receive in order:
-			//  1. Channel number
-			//  2. Payload length
-			//  3. Payload
 			var chno uint
-			err := dec.Decode(&chno)
+			err = dec.Decode(&chno)
 			if err != nil {
 				return
 			}
@@ -183,23 +170,21 @@ func Split(conn net.Conn, n int) (muxconns []*muxConn, err error) {
 			if err != nil {
 				return
 			}
-			payload := make([]byte, plen)
-			err = dec.Decode(&payload)
+			if plen > defaultBufSize {
+				log.Fatal("muxconn: packet too large:", plen, "( max:", defaultBufSize, ")")
+			}
+			sub_buffer := buffer[:plen]
+			err = dec.Decode(&sub_buffer)
 			if err != nil {
 				return
 			}
-			recvbufs[chno].Write(payload)
+			pipeWriters[chno].Write(sub_buffer)
 		}
-		return
 	}()
 
-	// muxConn proxies
-	muxconns = make([]*muxConn, n)
+	muxconns = make([]net.Conn, n)	
 	for i := 0; i < n; i++ {
-		muxconns[i] = &muxConn{chno: uint(i), localaddr: conn.LocalAddr(),
-			remoteaddr: conn.RemoteAddr(), sendch: sendch,
-			closewaiter: &closewaiter, recvbuf: recvbufs[i]}
+		muxconns[i] = &muxConn{conn, uint(i), writeErrCh, pipeReaders[i], &closewaiter}
 	}
-
-	return muxconns, nil
+	return
 }
