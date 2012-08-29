@@ -117,10 +117,12 @@ func socketClosed(err error) bool {
 	if err == nil {
 		return false
 	}
-	// TODO: update this with additional checks
+	// TODO: update this with additional (perhaps non-TCP) checks
 	// TODO: replace this with a check for net.errClosing when/if it's public
 	if err == io.EOF ||
-		strings.HasSuffix(err.Error(), "use of closed network connection") {
+		strings.HasSuffix(err.Error(), "use of closed network connection") ||
+		strings.HasSuffix(err.Error(), "broken pipe") ||
+		strings.HasSuffix(err.Error(), "connection reset by peer") {
 		return true
 	}
 	return false
