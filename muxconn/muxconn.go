@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vsekhar/govtil/bufferedpipe"
+	"github.com/vsekhar/govtil/pipes"
 )
 
 const defaultBufSize = 4096
@@ -171,7 +171,7 @@ func Split(conn net.Conn, n int) (muxconns []net.Conn, err error) {
 // this version only if you expect the different muxed channels to be read at
 // very different rates, otherwise Split is likely faster
 func SplitBuffered(conn net.Conn, n int) (muxconns []net.Conn, err error) {
-	return doSplit(conn, n, bufferedpipe.New)
+	return doSplit(conn, n, pipes.Buffered)
 }
 
 func doSplit(conn net.Conn, n int, makepipe func() (*io.PipeReader, *io.PipeWriter)) (muxconns []net.Conn, err error) {
