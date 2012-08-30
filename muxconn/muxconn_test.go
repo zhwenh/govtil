@@ -33,15 +33,21 @@ func SelfConnection() (net.Conn, net.Conn) {
 	return inconn, outconn
 }
 
-func MuxPairs(inconn, outconn net.Conn, n int) (ins []net.Conn, outs []net.Conn, err error) {
+func MuxPairs(inconn, outconn net.Conn, n int, buffered bool) (ins, outs []net.Conn, err error) {
+	var split func(net.Conn, int) ([]net.Conn, error)
+	if buffered {
+		split = SplitBuffered
+	} else {
+		split = Split
+	}
 	if inconn != nil {
-		ins, err = Split(inconn, n)
+		ins, err = split(inconn, n)
 		if err != nil {
 			return
 		}
 	}
 	if outconn != nil {
-		outs, err = Split(outconn, n)
+		outs, err = split(outconn, n)
 		if err != nil {
 			return
 		}
@@ -150,7 +156,7 @@ func TestSplitReceiver(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Fatal("MuxPairs failed: ", err)
 	}
@@ -186,7 +192,7 @@ func TestNMuxes(t *testing.T) {
 	}
 
 	inconn, outconn := SelfConnection()
-	ins, outs, err := MuxPairs(inconn, outconn, n)
+	ins, outs, err := MuxPairs(inconn, outconn, n, false)
 	if err != nil {
 		t.Fatal("MuxPairs failed: ", err)
 	}
@@ -241,7 +247,7 @@ func SetupRPC(ins, outs []net.Conn) (ret []*rpc.Client, err error) {
 
 func TestRPC(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Error("MuxPairs failed: ", err)
 	}
@@ -262,7 +268,7 @@ func TestRPC(t *testing.T) {
 
 func TestXRPC(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Error("MuxPairs failed: ", err)
 	}
@@ -312,7 +318,7 @@ func TestXRPC(t *testing.T) {
 
 func TestRPCDropClientConn(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Fatal("MuxPairs failed: ", err)
 	}
@@ -337,7 +343,7 @@ func TestRPCDropClientConn(t *testing.T) {
 
 func TestRPCDropServerConn(t *testing.T) {
 	inconn, outconn := SelfConnection()
-	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Error("MuxPairs failed: ", err)
 	}
@@ -362,6 +368,14 @@ func TestRPCDropServerConn(t *testing.T) {
 
 // Stress buffers and flow control
 func TestRPCBigData(t *testing.T) {
+	doTestRPCBigData(t, false)
+}
+
+func TestRPCBigDataBuffered(t *testing.T) {
+	doTestRPCBigData(t, true)
+}
+
+func doTestRPCBigData(t *testing.T, buffered bool) {
 	var plen int
 	if testing.Short() {
 		plen = 1024 // 1 kB
@@ -376,7 +390,7 @@ func TestRPCBigData(t *testing.T) {
 	payload := string(payloadbytes)
 
 	inconn, outconn := SelfConnection()
-	ins, outs, err := MuxPairs(inconn, outconn, 2)
+	ins, outs, err := MuxPairs(inconn, outconn, 2, buffered)
 	if err != nil {
 		t.Fatal("MuxPairs failed: ", err)
 	}

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/vsekhar/govtil/bufferedpipe"
 )
 
 const defaultBufSize = 4096
@@ -162,6 +164,17 @@ func socketClosed(err error) bool {
 // not vastly differ, in order ensure fast channels are not starved waiting for
 // slow ones.
 func Split(conn net.Conn, n int) (muxconns []net.Conn, err error) {
+	return doSplit(conn, n, io.Pipe)
+}
+
+// SplitBuffered is the same as Split, but uses buffered pipes internally. Use
+// this version only if you expect the different muxed channels to be read at
+// very different rates, otherwise Split is likely faster
+func SplitBuffered(conn net.Conn, n int) (muxconns []net.Conn, err error) {
+	return doSplit(conn, n, bufferedpipe.New)
+}
+
+func doSplit(conn net.Conn, n int, makepipe func() (*io.PipeReader, *io.PipeWriter)) (muxconns []net.Conn, err error) {
 	if n <= 0 {
 		err = errors.New("Invalid number of connections to split into: " + fmt.Sprint(n))
 		return
@@ -192,7 +205,7 @@ func Split(conn net.Conn, n int) (muxconns []net.Conn, err error) {
 	pipeReaders := make([]*io.PipeReader, n)
 	pipeWriters := make([]*io.PipeWriter, n)
 	for i := 0; i < n; i++ {
-		pipeReaders[i], pipeWriters[i] = io.Pipe()
+		pipeReaders[i], pipeWriters[i] = makepipe()
 	}
 	go func() {
 		var err error = nil
