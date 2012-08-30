@@ -439,7 +439,7 @@ func doBenchmarkRPCCalls(b *testing.B, buffered bool) {
 		clients[0].Go("RPCRecv.Echo", &payload, &rpayload, retch)
 		clients[1].Go("RPCRecv.Echo", &payload, &rpayload, retch)
 	}
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < b.N * 2; i++ {
 		<-retch
 	}
 	b.StopTimer()
