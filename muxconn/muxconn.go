@@ -23,11 +23,11 @@ type sendPacket struct {
 }
 
 type muxConn struct {
-	conn		net.Conn
-	chno		uint
-	writeErrCh	chan error
-	readPipe	*io.PipeReader
-	closewaiter	*sync.WaitGroup
+	connCh      chan net.Conn
+	chno        uint
+	writeErr    *error
+	readPipe    *io.PipeReader
+	closewaiter *sync.WaitGroup
 }
 
 func (mc *muxConn) Write(data []byte) (n int, err error) {
@@ -37,21 +37,26 @@ func (mc *muxConn) Write(data []byte) (n int, err error) {
 		}
 	}()
 
-	enc := gob.NewEncoder(mc.conn)
 	for len(data) > 0 {
+		// make one attempt to write at most defaultBufSize bytes to the
+		// underlying connection
 		func() {
-			// get a token to claim access to the underlying connection
-			err = <-mc.writeErrCh
-			defer func() {
-				mc.writeErrCh <- err
-			}()
+			// claim channel (acts as a mutex)
+			conn := <-mc.connCh
+			defer func() { mc.connCh <- conn }()
 
-			if err != nil {
-				// short circuit if we've seen an error on this connection
+			// short circuit if we've seen an error on this connection.
+			if *mc.writeErr != nil {
 				data = nil // stop loop
+				err = *mc.writeErr
 				return
 			}
-			
+
+			// update based on any errors seen on this write attempt
+			defer func() { *mc.writeErr = err }()
+
+			enc := gob.NewEncoder(conn)
+
 			// write at most a fixed amount (additional data will have to wait
 			// for the next loop iteration)
 			to_write := defaultBufSize
@@ -91,11 +96,19 @@ func (mc *muxConn) Close() error {
 }
 
 func (mc *muxConn) LocalAddr() net.Addr {
-	return mc.conn.LocalAddr()
+	conn := <-mc.connCh
+	defer func() {
+		mc.connCh <- conn
+	}()
+	return conn.LocalAddr()
 }
 
 func (mc *muxConn) RemoteAddr() net.Addr {
-	return mc.conn.RemoteAddr()
+	conn := <-mc.connCh
+	defer func() {
+		mc.connCh <- conn
+	}()
+	return conn.RemoteAddr()
 }
 
 func (*muxConn) SetDeadline(time.Time) error {
@@ -118,10 +131,11 @@ func socketClosed(err error) bool {
 	}
 	// TODO: update this with additional (perhaps non-TCP) checks
 	// TODO: replace this with a check for net.errClosing when/if it's public
+	errString := err.Error()
 	if err == io.EOF ||
-		strings.HasSuffix(err.Error(), "use of closed network connection") ||
-		strings.HasSuffix(err.Error(), "broken pipe") ||
-		strings.HasSuffix(err.Error(), "connection reset by peer") {
+		strings.HasSuffix(errString, "use of closed network connection") ||
+		strings.HasSuffix(errString, "broken pipe") ||
+		strings.HasSuffix(errString, "connection reset by peer") {
 		return true
 	}
 	return false
@@ -152,32 +166,42 @@ func Split(conn net.Conn, n int) (muxconns []net.Conn, err error) {
 		err = errors.New("Invalid number of connections to split into: " + fmt.Sprint(n))
 		return
 	}
-	
-	writeErrCh := make(chan error, 1)	// buffered, acts as a mutex
-	writeErrCh <- nil					// prime with the first token
+
+	// The underlying connection lives in a buffered channel and is pulled out
+	// for each goroutine that wants to write data (reads are handled by the
+	// read pump below)
+	connCh := make(chan net.Conn, 1)
+	connCh <- conn
+
+	// A goroutine waits for all proxies to Close(), and then closes the
+	// underlying Conn
+	var closewaiter sync.WaitGroup
+	closewaiter.Add(n)
+	go func() {
+		closewaiter.Wait()
+		// claim channel and put back so Write()'s will properly err out
+		conn := <-connCh
+		defer func() {
+			connCh <- conn
+		}()
+		conn.Close()
+	}()
+
+	// A read pump keeps reading frames from the underlying Conn and writing
+	// them to the correct pipe
 	pipeReaders := make([]*io.PipeReader, n)
 	pipeWriters := make([]*io.PipeWriter, n)
 	for i := 0; i < n; i++ {
 		pipeReaders[i], pipeWriters[i] = io.Pipe()
 	}
-	var closewaiter sync.WaitGroup
-	closewaiter.Add(n)
-	
-	// closer
-	go func() {
-		closewaiter.Wait()
-		conn.Close()
-	}()
-	
-	// read pump
 	go func() {
 		var err error = nil
 		defer func() {
-			for _,writer := range pipeWriters {
+			for _, writer := range pipeWriters {
 				writer.CloseWithError(err)
 			}
 		}()
-		
+
 		buffer := make([]byte, defaultBufSize)
 		dec := gob.NewDecoder(conn)
 		for {
@@ -187,7 +211,7 @@ func Split(conn net.Conn, n int) (muxconns []net.Conn, err error) {
 				return
 			}
 			if int(chno) >= n {
-				log.Fatal("muxconn: Receive got invalid mux channel ", chno) 
+				log.Fatal("muxconn: Receive got invalid mux channel ", chno)
 			}
 			var plen int
 			err = dec.Decode(&plen)
@@ -206,9 +230,14 @@ func Split(conn net.Conn, n int) (muxconns []net.Conn, err error) {
 		}
 	}()
 
-	muxconns = make([]net.Conn, n)	
+	// The proxies and their methods expose a net.Conn interface for each muxed
+	// channel
+	muxconns = make([]net.Conn, n)
+	var writeErr error
 	for i := 0; i < n; i++ {
-		muxconns[i] = &muxConn{conn, uint(i), writeErrCh, pipeReaders[i], &closewaiter}
+		muxconns[i] = &muxConn{connCh: connCh, chno: uint(i),
+			writeErr: &writeErr, readPipe: pipeReaders[i],
+			closewaiter: &closewaiter}
 	}
 	return
 }
