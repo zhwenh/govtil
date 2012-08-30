@@ -2,7 +2,6 @@ package muxconn
 
 import (
 	"bytes"
-//	"govtil/dlog"
 	"encoding/gob"
 	"errors"
 	"io"
@@ -37,11 +36,15 @@ func SelfConnection() (net.Conn, net.Conn) {
 func MuxPairs(inconn, outconn net.Conn, n int) (ins []net.Conn, outs []net.Conn, err error) {
 	if inconn != nil {
 		ins, err = Split(inconn, n)
-		if err != nil { return }
+		if err != nil {
+			return
+		}
 	}
 	if outconn != nil {
 		outs, err = Split(outconn, n)
-		if err != nil { return }
+		if err != nil {
+			return
+		}
 	}
 	return
 }
@@ -154,7 +157,7 @@ func TestClose(t *testing.T) {
 
 	// Close one mux, should be able to read from the other
 	ins[0].Close()
-	sdata := []byte{11,23,5}
+	sdata := []byte{11, 23, 5}
 	go func() {
 		ins[1].Write(sdata)
 	}()
@@ -187,23 +190,23 @@ func TestNMuxes(t *testing.T) {
 	if err != nil {
 		t.Fatal("MuxPairs failed: ", err)
 	}
-	
+
 	// in --> out
-	sdata := []byte{11,23,5}
+	sdata := []byte{11, 23, 5}
 	go func() {
-		for _,c := range ins {
+		for _, c := range ins {
 			c.Write(sdata)
 		}
 	}()
 	rch := make(chan []byte)
-	for _,c := range outs {
+	for _, c := range outs {
 		go func(c net.Conn) {
 			rdata := make([]byte, len(sdata))
 			c.Read(rdata)
 			rch <- rdata
 		}(c)
 	}
-	
+
 	for i := 0; i < n; i++ {
 		if !bytes.Equal(sdata, <-rch) {
 			t.Error("Failed on channel ", i)
@@ -212,6 +215,7 @@ func TestNMuxes(t *testing.T) {
 }
 
 type RPCRecv int
+
 func (r *RPCRecv) Echo(in *string, out *string) error {
 	*out = *in
 	return nil
@@ -224,12 +228,12 @@ func SetupRPC(ins, outs []net.Conn) (ret []*rpc.Client, err error) {
 		return
 	}
 	recv := new(RPCRecv)
-	for _,in := range ins {
+	for _, in := range ins {
 		srv := rpc.NewServer()
 		srv.Register(recv)
 		go srv.ServeConn(in)
 	}
-	for _,out := range outs {
+	for _, out := range outs {
 		ret = append(ret, rpc.NewClient(out))
 	}
 	return ret, nil
@@ -264,7 +268,7 @@ func TestXRPC(t *testing.T) {
 	}
 
 	type pair struct {
-		In net.Conn
+		In  net.Conn
 		Out net.Conn
 	}
 
@@ -274,7 +278,7 @@ func TestXRPC(t *testing.T) {
 	pairs[0].Out = outs[0]
 	pairs[1].Out = outs[1]
 
-	for _,p := range pairs {
+	for _, p := range pairs {
 		if p.In.LocalAddr().String() != p.Out.RemoteAddr().String() {
 			t.Error("Address mismatch: ", p.In.LocalAddr(), " != ", p.Out.RemoteAddr())
 		}
@@ -360,9 +364,9 @@ func TestRPCDropServerConn(t *testing.T) {
 func TestRPCBigData(t *testing.T) {
 	var plen int
 	if testing.Short() {
-		plen = 1024				// 1 kB
+		plen = 1024 // 1 kB
 	} else {
-		plen = 10 * 1024 * 1024	// 10 MB
+		plen = 10 * 1024 * 1024 // 10 MB
 	}
 
 	payloadbytes := make([]byte, plen)
@@ -378,7 +382,7 @@ func TestRPCBigData(t *testing.T) {
 	}
 	clients, _ := SetupRPC(ins, outs)
 	success := make(chan bool)
-	for _,client := range clients {
+	for _, client := range clients {
 		go func() {
 			rpayload := ""
 			client.Call("RPCRecv.Echo", &payload, &rpayload)
