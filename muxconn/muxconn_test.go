@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/rpc"
 	"testing"
+
+	vbytes "github.com/vsekhar/govtil/bytes"
 )
 
 // Set up a connection to myself (for testing)
@@ -366,46 +368,79 @@ func TestRPCDropServerConn(t *testing.T) {
 	}
 }
 
-// Stress buffers and flow control
-func TestRPCBigData(t *testing.T) {
-	doTestRPCBigData(t, false)
+// Benchmark moving a single big piece of data
+func BenchmarkRPCData(b *testing.B) {
+	doBenchmarkRPCData(b, false)
 }
 
-func TestRPCBigDataBuffered(t *testing.T) {
-	doTestRPCBigData(t, true)
+func BenchmarkRPCDataBuf(b *testing.B) {
+	doBenchmarkRPCData(b, true)
 }
 
-func doTestRPCBigData(t *testing.T, buffered bool) {
-	var plen int
-	if testing.Short() {
-		plen = 1024 // 1 kB
-	} else {
-		plen = 10 * 1024 * 1024 // 10 MB
-	}
+func doBenchmarkRPCData(b *testing.B, buffered bool) {
+	b.StopTimer()
+	plen := b.N * 1024          // N kB
+	b.SetBytes(int64(plen) * 2) // both directions
 
-	payloadbytes := make([]byte, plen)
-	for i := 0; i < len(payloadbytes); i++ {
-		payloadbytes[i] = byte(i)
-	}
-	payload := string(payloadbytes)
+	payload := string(vbytes.RandBytes(plen))
 
 	inconn, outconn := SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, 2, buffered)
 	if err != nil {
-		t.Fatal("MuxPairs failed: ", err)
+		b.Fatal("MuxPairs failed: ", err)
 	}
-	clients, _ := SetupRPC(ins, outs)
-	success := make(chan bool)
-	for _, client := range clients {
-		go func() {
-			rpayload := ""
-			client.Call("RPCRecv.Echo", &payload, &rpayload)
-			success <- rpayload == payload
-		}()
+	clients, err := SetupRPC(ins, outs)
+	if err != nil {
+		b.Fatal("SetupRPC failed: ", err)
 	}
-	for _ = range clients {
-		if !<-success {
-			t.Fatal("Bigdata failed")
-		}
+	rpayload1 := ""
+	rpayload2 := ""
+	retch := make(chan *rpc.Call, 2)
+	b.StartTimer()
+	clients[0].Go("RPCRecv.Echo", &payload, &rpayload1, retch)
+	clients[1].Go("RPCRecv.Echo", &payload, &rpayload2, retch)
+	<-retch
+	<-retch
+	b.StopTimer()
+	if rpayload1 != payload || rpayload2 != payload {
+		b.Fatal("Bigdata failed")
 	}
+}
+
+// Benchmark making many small calls
+func BenchmarkRPCCalls(b *testing.B) {
+	doBenchmarkRPCCalls(b, false)
+}
+
+func BenchmarkRPCCallsBuf(b *testing.B) {
+	doBenchmarkRPCCalls(b, true)
+}
+
+func doBenchmarkRPCCalls(b *testing.B, buffered bool) {
+	b.StopTimer()
+	payload := string([]byte{11, 23, 5})
+
+	// payload sent b.N times in two directions
+	b.SetBytes(int64(len(payload) * b.N * 2))
+
+	inconn, outconn := SelfConnection()
+	ins, outs, err := MuxPairs(inconn, outconn, 2, buffered)
+	if err != nil {
+		b.Fatal("MuxPairs failed: ", err)
+	}
+	clients, err := SetupRPC(ins, outs)
+	if err != nil {
+		b.Fatal("SetupRPC failed: ", err)
+	}
+	retch := make(chan *rpc.Call, b.N*2)
+	rpayload := ""
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		clients[0].Go("RPCRecv.Echo", &payload, &rpayload, retch)
+		clients[1].Go("RPCRecv.Echo", &payload, &rpayload, retch)
+	}
+	for i := 0; i < b.N; i++ {
+		<-retch
+	}
+	b.StopTimer()
 }
