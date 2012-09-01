@@ -18,6 +18,10 @@ import (
 
 const defaultBufSize = 4096
 
+// TODO: Handle read/writes on closed muxconns (right now they may fail
+// silently)
+// var ErrClosed = errors.New("muxconn: read/write on closed muxconn")
+
 type sendPacket struct {
 	chno    uint
 	payload []byte

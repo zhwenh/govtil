@@ -361,6 +361,10 @@ func TestRPCDropServerConn(t *testing.T) {
 		t.Error("Regular RPC call failed: ", err)
 	}
 
+	// TODO: test closing the muxconn instead of the underlying connection once
+	// muxconn handles read-after-close errors
+	// ins[1].Close()
+	outconn.Close()
 	inconn.Close()
 	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
 	if err != io.EOF {
