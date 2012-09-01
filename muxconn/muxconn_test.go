@@ -349,11 +349,13 @@ func TestRPCDropServerConn(t *testing.T) {
 	if err != nil {
 		t.Error("MuxPairs failed: ", err)
 	}
+	ins[0].Close()
+	outs[0].Close()
 
 	srv := rpc.NewServer()
 	srv.Register(new(RPCRecv))
-	go srv.ServeConn(ins[0])
-	client := rpc.NewClient(outs[0])
+	go srv.ServeConn(ins[1])
+	client := rpc.NewClient(outs[1])
 	sdata := "abc"
 	rdata := ""
 	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
