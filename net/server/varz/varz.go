@@ -4,15 +4,12 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/vsekhar/govtil/net/server/multihandler"
 )
 
 // A function that writes varz data and returns an error
 type VarzFunc func(io.Writer) error
-
-var Timeout = 10 * time.Second
 
 type subVarzHandler struct {
 	VarzFunc
@@ -22,7 +19,7 @@ type subVarzHandler struct {
 func (svh *subVarzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := svh.VarzFunc(w)
 	if err != nil {
-		log.Println("Varz failed:", svh.string)
+		log.Println("Varz failed:", svh.string, ",", err)
 	}
 }
 
