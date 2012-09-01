@@ -374,6 +374,32 @@ func TestRPCDropServerConn(t *testing.T) {
 	}
 }
 
+func TestCascadedMuxConn(t *testing.T) {
+	inconn, outconn := SelfConnection()
+	for i := 0; i < 10; i++ {
+		ins, outs, err := MuxPairs(inconn, outconn, 2, false)
+		if err != nil {
+			t.Fatal("Could not set up cascade")
+		}
+		ins[0].Close()
+		outs[0].Close()
+		inconn = ins[1]
+		outconn = outs[1]
+	}
+
+	srv := rpc.NewServer()
+	srv.Register(new(RPCRecv))
+	go srv.ServeConn(inconn)
+	client := rpc.NewClient(outconn)
+	sdata := "abc"
+	rdata := ""
+	err := client.Call("RPCRecv.Echo", &sdata, &rdata)
+	if err != nil || sdata != rdata {
+		t.Error("Cascaded RPC call failed: ", err)
+	}
+	client.Close()
+}
+
 // Benchmark moving a single big piece of data
 func BenchmarkRPCData(b *testing.B) {
 	doBenchmarkRPCData(b, false)
