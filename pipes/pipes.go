@@ -1,3 +1,5 @@
+// Package pipes provides buffered and bi-directional pipes, extending the
+// built-in pipes provided in package io.
 package pipes
 
 import (
@@ -66,14 +68,15 @@ func (bi *BiPipe) CloseWithError(err error) error {
 	return err2
 }
 
-// Bi returns two ends of a bi-directional unbuffered in-memory pipe
+// Bi returns two ends of a bi-directional unbuffered in-memory pipe. Each end
+// can has methods Read(), Write(), Close() and CloseWithError().
 func Bi() (BiPipe, BiPipe) {
 	p1reader, p1writer := io.Pipe()
 	p2reader, p2writer := io.Pipe()
 	return BiPipe{p1reader, p2writer}, BiPipe{p2reader, p1writer}
 }
 
-// BiBuffered returns two ends of a bi-directional buffered in-memory pipe
+// BiBuffered is the same as Bi but the returned pipes are buffered
 func BiBuffered() (BiPipe, BiPipe) {
 	p1reader, p1writer := Buffered()
 	p2reader, p2writer := Buffered()
