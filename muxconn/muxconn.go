@@ -1,5 +1,5 @@
-// Muxer
-
+// Package muxconn multiplexes multiple network connections (net.Conn) onto
+// a single underlying connection
 package muxconn
 
 import (
