@@ -9,10 +9,10 @@ import (
 	"io"
 	"log"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
+	vnet "github.com/vsekhar/govtil/net"
 	"github.com/vsekhar/govtil/pipes"
 )
 
@@ -38,7 +38,7 @@ type muxConn struct {
 
 func (mc *muxConn) Write(data []byte) (n int, err error) {
 	defer func() {
-		if socketClosed(err) {
+		if vnet.SocketClosed(err) {
 			err = io.EOF
 		}
 	}()
@@ -87,7 +87,7 @@ func (mc *muxConn) Write(data []byte) (n int, err error) {
 
 func (mc *muxConn) Read(data []byte) (n int, err error) {
 	defer func() {
-		if socketClosed(err) {
+		if vnet.SocketClosed(err) {
 			err = io.EOF
 		}
 	}()
@@ -127,24 +127,6 @@ func (*muxConn) SetReadDeadline(time.Time) error {
 
 func (*muxConn) SetWriteDeadline(time.Time) error {
 	return errors.New("muxConn does not implement deadlines")
-}
-
-// Return whether the given error indicates a socket that produced it has been
-// closed by the other end
-func socketClosed(err error) bool {
-	if err == nil {
-		return false
-	}
-	// TODO: update this with additional (perhaps non-TCP) checks
-	// TODO: replace this with a check for net.errClosing when/if it's public
-	errString := err.Error()
-	if err == io.EOF ||
-		strings.HasSuffix(errString, "use of closed network connection") ||
-		strings.HasSuffix(errString, "broken pipe") ||
-		strings.HasSuffix(errString, "connection reset by peer") {
-		return true
-	}
-	return false
 }
 
 // Split muxes a network connection into 'n' separate connections. It returns
