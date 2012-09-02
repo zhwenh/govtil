@@ -2,6 +2,7 @@
 package testing
 
 import (
+	"errors"
 	"net"
 	"log"
 )
@@ -33,4 +34,8 @@ type RPCRecv int
 func (r *RPCRecv) Echo(in *string, out *string) error {
 	*out = *in
 	return nil
+}
+
+func (r *RPCRecv) Error(*string, *string) error {
+	return errors.New("testing.RPCRecv intentional error")
 }
