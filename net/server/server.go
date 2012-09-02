@@ -1,5 +1,5 @@
-// Package server provides a generic process server with healthz and varz
-// functionality
+// Package server provides a generic process server with healthz, varz and
+// direct socket functionality
 package server
 
 import (
@@ -16,10 +16,11 @@ import (
 	"github.com/vsekhar/govtil/net/server/direct"
 )
 
+// TODO: testing using net/http/httptest
+
 var Healthz = healthz.NewHandler()
 var Varz = varz.NewHandler()
 var DirectCh = make(chan net.Conn)
-
 
 // Register a function providing healthz information. Function must be of the
 // form:
@@ -62,16 +63,13 @@ func newServeMux() *serveMux {
 // of an os.Interrupt.
 //
 func ServeForever(port int) {
-	// Create all of this instead of using http.ListenAndServe() so as not to
-	// pollute http package variables, and to control the server (for signals,
-	// etc.)
-
 	mux := newServeMux()
 	mux.HandleFunc("/", defaultHandler)
 	mux.Handle("/healthz", Healthz)
 	mux.Handle("/varz", Varz)
 	mux.Handle("/direct", &direct.Handler{DirectCh})
 
+	// Create a listen socket that is closed upon os.Interrupt
 	addr := ":" + fmt.Sprint(port)
 	srv := &http.Server{Addr: addr, Handler: mux}
 

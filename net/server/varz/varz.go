@@ -1,3 +1,4 @@
+// Package varz provides a simple varz implementation
 package varz
 
 import (

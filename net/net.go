@@ -9,9 +9,9 @@ import (
 // Return whether the given error indicates a socket that produced it has been
 // closed by the other end
 //
-// Currently, SocketClosed() will return true for the following errors:
-//	io.EOF
-//	err.Error() ends in:
+// Currently, SocketClosed() will return true if err:
+//	== io.EOF
+//	.Error() end in:
 //		"use of closed network connection"
 //		"broken pipe"
 //		"connection reset by peer"

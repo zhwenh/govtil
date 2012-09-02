@@ -1,3 +1,6 @@
+// Package multihandler provides an aggregating http.Handler for registering
+// multiple sources and collecting information from them in response to an
+// HTTP request. It is primarily used for healthz and varz services.
 package multihandler
 
 import (

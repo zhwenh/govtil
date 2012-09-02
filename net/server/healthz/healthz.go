@@ -1,4 +1,4 @@
-// Package healthz provides HTTP handlers for a simple healthz implementation
+// Package healthz provides a simple healthz implementation
 package healthz
 
 import (
