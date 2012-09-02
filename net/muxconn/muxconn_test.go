@@ -11,29 +11,8 @@ import (
 	"testing"
 
 	vbytes "github.com/vsekhar/govtil/bytes"
+	vtesting "github.com/vsekhar/govtil/testing"
 )
-
-// Set up a connection to myself (for testing)
-func SelfConnection() (net.Conn, net.Conn) {
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		log.Fatal("Could not set up listen: ", err)
-	}
-	defer listener.Close()
-
-	inconnch := make(chan net.Conn)
-	go func() {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Fatal("Couldn't receive connection")
-		}
-		inconnch <- conn
-	}()
-
-	outconn, _ := net.Dial("tcp", listener.Addr().String())
-	inconn := <-inconnch
-	return inconn, outconn
-}
 
 func MuxPairs(inconn, outconn net.Conn, n int, buffered bool) (ins, outs []net.Conn, err error) {
 	var split func(net.Conn, int) ([]net.Conn, error)
@@ -58,7 +37,7 @@ func MuxPairs(inconn, outconn net.Conn, n int, buffered bool) (ins, outs []net.C
 }
 
 func TestConnection(t *testing.T) {
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	defer inconn.Close()
 	defer outconn.Close()
 	data := make([]byte, 2)
@@ -85,7 +64,7 @@ func TestConnection(t *testing.T) {
 }
 
 func TestSplitSender(t *testing.T) {
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	defer outconn.Close()
 
 	// Use inconn as a sender
@@ -124,7 +103,7 @@ func TestSplitSender(t *testing.T) {
 }
 
 func TestSplitReceiver(t *testing.T) {
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	outchannels, err := Split(outconn, 2)
 	if err != nil {
 		t.Error("Split failed: ", err)
@@ -157,7 +136,7 @@ func TestSplitReceiver(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Fatal("MuxPairs failed: ", err)
@@ -193,7 +172,7 @@ func TestNMuxes(t *testing.T) {
 		n = 10000
 	}
 
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, n, false)
 	if err != nil {
 		t.Fatal("MuxPairs failed: ", err)
@@ -248,7 +227,7 @@ func SetupRPC(ins, outs []net.Conn) (ret []*rpc.Client, err error) {
 }
 
 func TestRPC(t *testing.T) {
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Error("MuxPairs failed: ", err)
@@ -269,7 +248,7 @@ func TestRPC(t *testing.T) {
 }
 
 func TestXRPC(t *testing.T) {
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Error("MuxPairs failed: ", err)
@@ -319,7 +298,7 @@ func TestXRPC(t *testing.T) {
 }
 
 func TestRPCDropClientConn(t *testing.T) {
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Fatal("MuxPairs failed: ", err)
@@ -344,7 +323,7 @@ func TestRPCDropClientConn(t *testing.T) {
 }
 
 func TestRPCDropServerConn(t *testing.T) {
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 	if err != nil {
 		t.Error("MuxPairs failed: ", err)
@@ -375,7 +354,7 @@ func TestRPCDropServerConn(t *testing.T) {
 }
 
 func TestCascadedMuxConn(t *testing.T) {
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	for i := 0; i < 10; i++ {
 		ins, outs, err := MuxPairs(inconn, outconn, 2, false)
 		if err != nil {
@@ -416,7 +395,7 @@ func doBenchmarkRPCData(b *testing.B, buffered bool) {
 
 	payload := string(vbytes.RandBytes(plen))
 
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, 2, buffered)
 	if err != nil {
 		b.Fatal("MuxPairs failed: ", err)
@@ -455,7 +434,7 @@ func doBenchmarkRPCCalls(b *testing.B, buffered bool) {
 	// payload sent b.N times in two directions
 	b.SetBytes(int64(len(payload) * b.N * 2))
 
-	inconn, outconn := SelfConnection()
+	inconn, outconn := vtesting.SelfConnection()
 	ins, outs, err := MuxPairs(inconn, outconn, 2, buffered)
 	if err != nil {
 		b.Fatal("MuxPairs failed: ", err)
