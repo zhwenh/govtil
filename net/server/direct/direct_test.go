@@ -1,24 +1,35 @@
 package direct
 
 import (
-	"log"
 	"net"
 	"net/http"
 	"testing"
 
 	vbytes "github.com/vsekhar/govtil/bytes"
+	vtesting "github.com/vsekhar/govtil/testing"
 )
 
-func TestDirect(t *testing.T) {
+func setupServer() (connch chan net.Conn, url string, closech chan bool, err error) {
 	// setup HTTP server with a directhandler
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		t.Fatal("Could not set up listen: ", err)
+		return
 	}
-	defer listener.Close()
-	connch := make(chan net.Conn)
+	connch = make(chan net.Conn)
+	closech = make(chan bool)
+	go func() {
+		<-closech
+		listener.Close()
+	}()
 	srv := &http.Server{Handler: &Handler{connch}}
 	go srv.Serve(listener)
+	_, p, _ := net.SplitHostPort(listener.Addr().String())
+	url = "http://:" + p
+	return
+}
+
+func TestDirect(t *testing.T) {
+	connch, url, closech, err := setupServer()
 	
 	indata := []byte("abc123")
 	outdata := []byte("123abcd")
@@ -45,24 +56,19 @@ func TestDirect(t *testing.T) {
 	}()
 	
 	// establish outbound connection
-	addr := listener.Addr().String()
-	_, p, err := net.SplitHostPort(addr)
-	if err != nil {
-		t.Fatal("Couldn't parse address:", addr)
-	}
-	url := "http://:" + p
-	log.Println(url)
 	conn, err := Dial(url)
 	if err != nil {
 		t.Fatal("Could not direct connect:", err)
 	}
 	defer conn.Close()
 
+	// write some data
 	n, err := conn.Write(indata)
 	if err != nil || n != len(indata) {
 		t.Error("couldn't write:", err, n)
 	}
 
+	// read some data
 	rdata := make([]byte, len(outdata))
 	n, err = conn.Read(rdata)
 	if err != nil {
@@ -71,4 +77,5 @@ func TestDirect(t *testing.T) {
 	if !vbytes.Equals(rdata[:n], outdata) {
 		t.Error("data mismatch:", rdata[:n], outdata)
 	}
+	closech <- true
 }
