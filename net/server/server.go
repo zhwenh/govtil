@@ -15,26 +15,26 @@ import (
 	"github.com/vsekhar/govtil/net/server/varz"
 )
 
-var Healthz healthz.HealthzHandler
-var Varz varz.VarzHandler
+var Healthz = healthz.NewHandler()
+var Varz = varz.NewHandler()
 
 // placeholder request handler
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<h1>govtil/server %s!</h1>", r.URL.Path[1:])
 }
 
-type ServeMux struct {
+type serveMux struct {
 	*http.ServeMux
 }
 
 // Add logging to http.ServeMux
-func (mux *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Println("govtil/net/server request from", r.RemoteAddr, "for", r.RequestURI)
 	mux.ServeMux.ServeHTTP(w,r)
 }
 
-func NewServeMux() *ServeMux {
-	return &ServeMux{http.NewServeMux()}
+func NewServeMux() *serveMux {
+	return &serveMux{http.NewServeMux()}
 }
 
 func ServeForever(port int) {
@@ -44,8 +44,8 @@ func ServeForever(port int) {
 
 	mux := NewServeMux()
 	mux.HandleFunc("/", defaultHandler)
-	mux.Handle("/healthz", &Healthz)
-	mux.Handle("/varz", &Varz)
+	mux.Handle("/healthz", Healthz)
+	mux.Handle("/varz", Varz)
 
 	addr := ":" + fmt.Sprint(port)
 	srv := &http.Server{Addr: addr, Handler: mux}

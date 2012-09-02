@@ -1,3 +1,4 @@
+// Package healthz provides HTTP handlers for a simple healthz implementation
 package healthz
 
 import (
@@ -5,7 +6,7 @@ import (
 	"net/http"
 )
 
-// A function that returns a health status
+// A function that returns a health status as a bool (true == OK)
 type HealthzFunc func() bool
 
 type subHealthzHandler struct {
@@ -13,18 +14,24 @@ type subHealthzHandler struct {
 	string
 }
 
-// HealthzHandler is an http.Handler that aggregates healthz values from any
-// number of registered HealthzFunc's
-type HealthzHandler struct {
+type healthzHandler struct {
 	handlers []*subHealthzHandler
 }
 
-// Register a VarzFunc to be included in varz output
-func (hh *HealthzHandler) Register(hf HealthzFunc, name string) {
+// Create a new healthz handler, an http.Handler that aggregates healthz
+// responses from a number of registered HealthzFunc's
+func NewHandler() *healthzHandler {
+	return &healthzHandler{}
+}
+
+// Register a HealthzFunc to be polled when a healthz request is received
+func (hh *healthzHandler) Register(hf HealthzFunc, name string) {
 	hh.handlers = append(hh.handlers, &subHealthzHandler{hf, name})
 }
 
-func (hh *HealthzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// Serve an HTTP request (do not call this, it is exported so net/http can
+// access it)
+func (hh *healthzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	repch := make(chan bool) 
 	for _, handler := range hh.handlers {
 		go func(h *subHealthzHandler) {

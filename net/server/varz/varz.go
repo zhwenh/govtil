@@ -25,12 +25,18 @@ func (svh *subVarzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // VarzHandler is an http.Handler that aggregates varz values from any number
 // of registered VarzFunc's
-type VarzHandler struct {
+type varzHandler struct {
 	multihandler.MultiHandler
 }
 
+// Create a new varz handler, an http.Handler that aggregates varz responses
+// from a number of registered VarzFunc's
+func NewHandler() *varzHandler {
+	return &varzHandler{}
+}
+
 // Register a VarzFunc to be included in varz output
-func (vh *VarzHandler) Register(vf VarzFunc, name string) {
+func (vh *varzHandler) Register(vf VarzFunc, name string) {
 	svh := subVarzHandler{vf, name}
 	vh.MultiHandler.Register(&svh)
 }
