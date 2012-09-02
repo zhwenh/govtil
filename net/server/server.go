@@ -33,16 +33,21 @@ func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	mux.ServeMux.ServeHTTP(w,r)
 }
 
-func NewServeMux() *serveMux {
+func newServeMux() *serveMux {
 	return &serveMux{http.NewServeMux()}
 }
 
+// Serve on a given port
+//
+// The server log to the default logger and will gracefully terminate on receipt
+// of an os.Interrupt.
+//
 func ServeForever(port int) {
 	// Create all of this instead of using http.ListenAndServe() so as not to
 	// pollute http package variables, and to control the server (for signals,
 	// etc.)
 
-	mux := NewServeMux()
+	mux := newServeMux()
 	mux.HandleFunc("/", defaultHandler)
 	mux.Handle("/healthz", Healthz)
 	mux.Handle("/varz", Varz)
