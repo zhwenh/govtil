@@ -3,6 +3,7 @@ package direct
 import (
 	"net"
 	"net/http"
+	"net/rpc"
 	"testing"
 
 	vbytes "github.com/vsekhar/govtil/bytes"
@@ -77,5 +78,29 @@ func TestDirect(t *testing.T) {
 	if !vbytes.Equals(rdata[:n], outdata) {
 		t.Error("data mismatch:", rdata[:n], outdata)
 	}
+	closech <- true
+}
+
+func TestRPCDirect(t *testing.T) {
+	connch, url, closech, _ := setupServer()
+
+	// outbound connection is client
+	conn, err := Dial(url)
+	if err != nil {
+		t.Fatal("Could not direct connect:", err)
+	}
+	client := rpc.NewClient(conn)
+
+	// inbound connection is server
+	srv := rpc.NewServer()
+	srv.Register(new(vtesting.RPCRecv))
+	go srv.ServeConn(<-connch)
+	sdata := "9876"
+	rdata := ""
+	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
+	if err != nil || sdata != rdata {
+		t.Error("RPCDirect failed:", err, sdata, rdata)
+	}
+	defer client.Close()
 	closech <- true
 }
