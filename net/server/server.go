@@ -13,10 +13,12 @@ import (
 	vnet "github.com/vsekhar/govtil/net"
 	"github.com/vsekhar/govtil/net/server/healthz"
 	"github.com/vsekhar/govtil/net/server/varz"
+	"github.com/vsekhar/govtil/net/server/direct"
 )
 
 var Healthz = healthz.NewHandler()
 var Varz = varz.NewHandler()
+var DirectCh = make(chan net.Conn)
 
 
 // Register a function providing healthz information. Function must be of the
@@ -68,6 +70,7 @@ func ServeForever(port int) {
 	mux.HandleFunc("/", defaultHandler)
 	mux.Handle("/healthz", Healthz)
 	mux.Handle("/varz", Varz)
+	mux.Handle("/direct", &direct.Handler{DirectCh})
 
 	addr := ":" + fmt.Sprint(port)
 	srv := &http.Server{Addr: addr, Handler: mux}
