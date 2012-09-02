@@ -18,6 +18,23 @@ import (
 var Healthz = healthz.NewHandler()
 var Varz = varz.NewHandler()
 
+
+// Register a function providing healthz information. Function must be of the
+// form:
+//	func myHealthzFunc() bool {...}
+//
+var RegisterHealthz = func (f healthz.HealthzFunc, name string) {
+	Healthz.Register(f, name)
+}
+
+// Register a function that writes varz information. Function must be of the
+// form:
+//	func myVarzFunc(io.Writer) error {...}
+//
+var RegisterVarz = func (f varz.VarzFunc, name string) {
+	Varz.Register(f, name)
+}
+
 // placeholder request handler
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<h1>govtil/server %s!</h1>", r.URL.Path[1:])
