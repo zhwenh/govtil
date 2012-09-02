@@ -23,7 +23,7 @@ var Varz = varz.NewHandler()
 // form:
 //	func myHealthzFunc() bool {...}
 //
-var RegisterHealthz = func (f healthz.HealthzFunc, name string) {
+func RegisterHealthz(f healthz.HealthzFunc, name string) {
 	Healthz.Register(f, name)
 }
 
@@ -31,7 +31,7 @@ var RegisterHealthz = func (f healthz.HealthzFunc, name string) {
 // form:
 //	func myVarzFunc(io.Writer) error {...}
 //
-var RegisterVarz = func (f varz.VarzFunc, name string) {
+func RegisterVarz(f varz.VarzFunc, name string) {
 	Varz.Register(f, name)
 }
 
