@@ -71,8 +71,6 @@ func ServeForever(port int) {
 
 	// Create a listen socket that is closed upon os.Interrupt
 	addr := ":" + fmt.Sprint(port)
-	srv := &http.Server{Addr: addr, Handler: mux}
-
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatal("Could not listen on address:", addr)
@@ -84,6 +82,8 @@ func ServeForever(port int) {
 		log.Println("Interrupt received, closing server")
 		l.Close()
 	}()
+
+	srv := &http.Server{Addr: addr, Handler: mux}
 	err = srv.Serve(l)
 	if !vnet.SocketClosed(err) {
 		panic(err)

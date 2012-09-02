@@ -5,7 +5,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"net/rpc"
 	"testing"
@@ -201,20 +200,13 @@ func TestNMuxes(t *testing.T) {
 	}
 }
 
-type RPCRecv int
-
-func (r *RPCRecv) Echo(in *string, out *string) error {
-	*out = *in
-	return nil
-}
-
 // Spawn RPC servers and return clients
 func SetupRPC(ins, outs []net.Conn) (ret []*rpc.Client, err error) {
 	if len(ins) != len(outs) {
 		err = errors.New("len(ins) and len(outs) must match")
 		return
 	}
-	recv := new(RPCRecv)
+	recv := new(vtesting.RPCRecv)
 	for _, in := range ins {
 		srv := rpc.NewServer()
 		srv.Register(recv)
@@ -232,7 +224,7 @@ func TestRPC(t *testing.T) {
 	if err != nil {
 		t.Error("MuxPairs failed: ", err)
 	}
-	recv := new(RPCRecv)
+	recv := new(vtesting.RPCRecv)
 	rpc.Register(recv)
 	go rpc.ServeConn(ins[0])
 	client := rpc.NewClient(outs[0])
@@ -275,7 +267,7 @@ func TestXRPC(t *testing.T) {
 	}
 
 	srv := rpc.NewServer()
-	srv.Register(new(RPCRecv))
+	srv.Register(new(vtesting.RPCRecv))
 	go srv.ServeConn(pairs[0].In)
 	go srv.ServeConn(pairs[1].Out)
 	client1 := rpc.NewClient(pairs[0].Out)
@@ -305,7 +297,7 @@ func TestRPCDropClientConn(t *testing.T) {
 	}
 
 	srv := rpc.NewServer()
-	srv.Register(new(RPCRecv))
+	srv.Register(new(vtesting.RPCRecv))
 	go srv.ServeConn(ins[0])
 	client := rpc.NewClient(outs[0])
 	sdata := "abc"
@@ -332,7 +324,7 @@ func TestRPCDropServerConn(t *testing.T) {
 	outs[0].Close()
 
 	srv := rpc.NewServer()
-	srv.Register(new(RPCRecv))
+	srv.Register(new(vtesting.RPCRecv))
 	go srv.ServeConn(ins[1])
 	client := rpc.NewClient(outs[1])
 	sdata := "abc"
@@ -367,7 +359,7 @@ func TestCascadedMuxConn(t *testing.T) {
 	}
 
 	srv := rpc.NewServer()
-	srv.Register(new(RPCRecv))
+	srv.Register(new(vtesting.RPCRecv))
 	go srv.ServeConn(inconn)
 	client := rpc.NewClient(outconn)
 	sdata := "abc"

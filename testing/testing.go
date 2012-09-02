@@ -27,3 +27,10 @@ func SelfConnection() (net.Conn, net.Conn) {
 	inconn := <-inconnch
 	return inconn, outconn
 }
+
+type RPCRecv int
+
+func (r *RPCRecv) Echo(in *string, out *string) error {
+	*out = *in
+	return nil
+}
