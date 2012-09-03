@@ -18,7 +18,7 @@ import (
 // is arbitrarily chosen and returned as the status code for the original
 // response along with any data written.
 type MultiHandler struct {
-	sync.Mutex
+	sync.RWMutex
 	handlers []http.Handler
 }
 
@@ -41,8 +41,8 @@ func (srw *subResponseWriter) WriteHeader(i int) {
 
 // Handle a request (called by the HTTP server)
 func (mh *MultiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	mh.Lock()
-	defer mh.Unlock()
+	mh.RLock()
+	defer mh.RUnlock()
 	replies := make(chan *subResponseWriter)
 	for _, handler := range mh.handlers {
 		go func(handler http.Handler) {
