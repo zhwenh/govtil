@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 
 	vnet "github.com/vsekhar/govtil/net"
 	"github.com/vsekhar/govtil/net/server/healthz"
@@ -71,17 +70,10 @@ func ServeForever(port int) {
 
 	// Create a listen socket that is closed upon os.Interrupt
 	addr := ":" + fmt.Sprint(port)
-	l, err := net.Listen("tcp", addr)
+	l, err := vnet.Listen("tcp", addr, os.Interrupt)
 	if err != nil {
-		log.Fatal("Could not listen on address:", addr)
+		log.Fatal("Could not listen on address:", addr, ",", err)
 	}
-	sigch := make(chan os.Signal)
-	signal.Notify(sigch, os.Interrupt)
-	go func() {
-		<-sigch
-		log.Println("Interrupt received, closing server")
-		l.Close()
-	}()
 
 	srv := &http.Server{Addr: addr, Handler: mux}
 	err = srv.Serve(l)

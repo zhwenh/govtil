@@ -3,6 +3,10 @@ package net
 
 import (
 	"io"
+	"log"
+	"net"
+	"os"
+	"os/signal"
 	"strings"
 )
 
@@ -32,4 +36,22 @@ func SocketClosed(err error) bool {
 		return true
 	}
 	return false
+}
+
+// Creates a listener that is closed in the event any signal listed is received
+// by the process. This is useful as a way to gracefully close an HTTP or RPC
+// server.
+func Listen(proto string, addr string, signals ...os.Signal) (l net.Listener, err error) {
+	l, err = net.Listen(proto, addr)
+	if err != nil {
+		return
+	}
+	sigch := make(chan os.Signal)
+	signal.Notify(sigch, signals...)
+	go func() {
+		sig := <-sigch
+		log.Println("Closing listen port", l.Addr().String(), "due to signal", sig)
+		l.Close()
+	}()
+	return
 }

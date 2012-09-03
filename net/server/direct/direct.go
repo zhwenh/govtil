@@ -69,7 +69,7 @@ func (dh *Handler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		log.Println("Could not hijack direct connection")
 		return
 	}
-	
+
 	err = sendServerToken(conn)
 	if err != nil {
 		log.Println("server/directhandler: sending server token,", err)
@@ -129,7 +129,7 @@ func Dial(url string) (conn net.Conn, err error) {
 	if err != nil { return }
 	err = clientconn.Write(r)
 	if err != nil {	return }
-	
+
 	// Hijack and return underlying connection and verify an OK response
 	conn, _ = clientconn.Hijack()
 	err = getServerToken(conn)
