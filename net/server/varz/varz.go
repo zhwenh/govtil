@@ -3,9 +3,9 @@ package varz
 
 import (
 	"io"
-	"log"
 	"net/http"
 
+	"github.com/vsekhar/govtil/log"
 	"github.com/vsekhar/govtil/net/server/multihandler"
 )
 

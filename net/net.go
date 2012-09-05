@@ -3,11 +3,12 @@ package net
 
 import (
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/signal"
 	"strings"
+
+	"github.com/vsekhar/govtil/log"
 )
 
 // Return whether the given error indicates a socket that produced it has been

@@ -2,8 +2,9 @@
 package healthz
 
 import (
-	"log"
 	"net/http"
+
+	"github.com/vsekhar/govtil/log"
 )
 
 // A function that returns a health status as a bool (true == OK)
