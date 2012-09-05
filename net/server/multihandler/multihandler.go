@@ -55,7 +55,7 @@ func (mh *MultiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}(handler)
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, 1024))
+	buf := bytes.NewBuffer(make([]byte, 0, 4096))
 	status := 0
 	for _ = range mh.handlers {
 		reply := <-replies
