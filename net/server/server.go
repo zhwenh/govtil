@@ -4,13 +4,14 @@ package server
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
 
+	"github.com/vsekhar/govtil/log"
 	vnet "github.com/vsekhar/govtil/net"
 	"github.com/vsekhar/govtil/net/server/healthz"
+	"github.com/vsekhar/govtil/net/server/logginghandler"
 	"github.com/vsekhar/govtil/net/server/varz"
 	"github.com/vsekhar/govtil/net/server/direct"
 )
@@ -42,40 +43,25 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<h1>govtil/server %s!</h1>", r.URL.Path[1:])
 }
 
-type serveMux struct {
-	*http.ServeMux
-}
-
-// Add logging to http.ServeMux
-func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Println("govtil/net/server:", r.Method, "from", r.RemoteAddr, "for", r.URL)
-	mux.ServeMux.ServeHTTP(w,r)
-}
-
-func newServeMux() *serveMux {
-	return &serveMux{http.NewServeMux()}
-}
-
 // Serve on a given port
 //
 // The server log to the default logger and will gracefully terminate on receipt
 // of an os.Interrupt.
 //
 func ServeForever(port int) (err error) {
-	mux := newServeMux()
+	mux := http.NewServeMux()
 	mux.HandleFunc("/", defaultHandler)
 	mux.Handle("/healthz", Healthz)
 	mux.Handle("/varz", Varz)
 	mux.Handle("/direct", &direct.Handler{DirectCh})
 
-	// Create a listen socket that is closed upon os.Interrupt
 	addr := ":" + fmt.Sprint(port)
-	l, err := vnet.Listen("tcp", addr, os.Interrupt)
-	if err != nil {
-		return
-	}
+	l, err := vnet.Listen("tcp", addr, os.Interrupt) // closed on SIGINT
+	if err != nil { return }
 
-	srv := &http.Server{Addr: addr, Handler: mux}
+	lh, err := logginghandler.New(mux, log.DEBUG)
+	if err != nil { return }
+	srv := &http.Server{Addr: addr, Handler: lh}
 	err = srv.Serve(l)
 	if vnet.SocketClosed(err) {
 		err = nil

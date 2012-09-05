@@ -258,10 +258,12 @@ func TestXRPC(t *testing.T) {
 	pairs[1].Out = outs[1]
 
 	for _, p := range pairs {
-		if p.In.LocalAddr().String() != p.Out.RemoteAddr().String() {
+		if p.In.LocalAddr().String() != p.Out.RemoteAddr().String() &&
+			p.In.LocalAddr().String() != "" {
 			t.Error("Address mismatch: ", p.In.LocalAddr(), " != ", p.Out.RemoteAddr())
 		}
-		if p.In.RemoteAddr().String() != p.Out.LocalAddr().String() {
+		if p.In.RemoteAddr().String() != p.Out.LocalAddr().String() &&
+			p.In.RemoteAddr().String() != "" {
 			t.Error("Address mismatch: ", p.In.RemoteAddr(), " != ", p.Out.LocalAddr())
 		}
 	}
