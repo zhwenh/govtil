@@ -21,7 +21,7 @@ import (
 
 type loggingResponseWriter struct {
 	guid guid.GUID
-	loglevel int
+	loglevel log.Level
 	http.ResponseWriter
 }
 
@@ -37,7 +37,7 @@ func (lrw *loggingResponseWriter) WriteHeader(i int) {
 
 type loggingHandler struct {
 	guid guid.GUID
-	loglevel int
+	loglevel log.Level
 	http.Handler
 }
 
@@ -53,8 +53,9 @@ func (lh *loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	lh.Handler.ServeHTTP(rw,r)
 }
 
-// Create a new logging handler
-func New(h http.Handler, loglevel int) (lh http.Handler, err error) {
+// Create a new logging handler and log at the specified level (see govtil/log
+// for explanations of the log levels)
+func New(h http.Handler, loglevel log.Level) (lh http.Handler, err error) {
 	g, err := guid.New()
 	if err != nil {
 		return
