@@ -36,10 +36,11 @@ func (hh *healthzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, handler := range hh.handlers {
 		go func(h *subHealthzHandler) {
 			healthy := h.HealthzFunc()
-			if !healthy {
+			if healthy {
+				repch <- healthy
+			} else {
 				log.Println("healthz failed:", h.string)
 			}
-			repch <- healthy
 		}(handler)
 	}
 	ret := true

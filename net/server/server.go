@@ -48,7 +48,7 @@ type serveMux struct {
 
 // Add logging to http.ServeMux
 func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Println("govtil/net/server request from", r.RemoteAddr, "for", r.RequestURI)
+	log.Println("govtil/net/server:", r.Method, "from", r.RemoteAddr, "for", r.URL)
 	mux.ServeMux.ServeHTTP(w,r)
 }
 
