@@ -64,7 +64,7 @@ func ServeForever(port int) (err error) {
 
 	sub := make(chan net.Conn)
 	mux.Handle("/streamz", &direct.Handler{sub})
-	streamz.Start(sub, StreamzCh)
+	go streamz.DispatchForever(sub, StreamzCh)
 	go streamz.Ticker(StreamzCh)
 
 	addr := ":" + fmt.Sprint(port)

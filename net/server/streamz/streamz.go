@@ -27,35 +27,33 @@ func Ticker(pub chan []byte) {
 	}
 }
 
-func Start(subs chan net.Conn, pub chan []byte) {
-	go func() {
-		sublist := make([]net.Conn, 0)
-		marks := make([]int, 0)
-		for {
-			select {
-				case sub := <-subs:
-					sublist = append(sublist, sub)
-				case data := <-pub:
-					for i, sub := range sublist {
-						_, err := sub.Write(data)
-						if err != nil {
-							marks = append(marks, i)
-						}
+func DispatchForever(subs chan net.Conn, pub chan []byte) {
+	sublist := make([]net.Conn, 0)
+	marks := make([]int, 0)
+	for {
+		select {
+			case sub := <-subs:
+				sublist = append(sublist, sub)
+			case data := <-pub:
+				for i, sub := range sublist {
+					_, err := sub.Write(data) // do concurrently ??
+					if err != nil {
+						marks = append(marks, i)
 					}
-					
-					// sweep (from the back)
-					l := len(sublist)
-					for len(marks) > 0 {
-						i := marks[len(marks)-1]
-						sublist[i].Close()
-						sublist[i] = sublist[l-1]
-						sublist = sublist[:l-1]
-						marks = marks[:len(marks)-1]
-						l--
-					}
-			}
+				}
+
+				// sweep (from the back)
+				l := len(sublist)
+				for len(marks) > 0 {
+					i := marks[len(marks)-1]
+					sublist[i].Close()
+					sublist[i] = sublist[l-1]
+					sublist = sublist[:l-1]
+					marks = marks[:len(marks)-1]
+					l--
+				}
 		}
-	}()
+	}
 }
 
 func Write(ch chan []byte, k, v string) error {
