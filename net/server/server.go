@@ -13,6 +13,7 @@ import (
 	"github.com/vsekhar/govtil/net/server/healthz"
 	"github.com/vsekhar/govtil/net/server/logginghandler"
 	"github.com/vsekhar/govtil/net/server/varz"
+	"github.com/vsekhar/govtil/net/server/streamz"
 	"github.com/vsekhar/govtil/net/server/direct"
 )
 
@@ -21,6 +22,7 @@ import (
 var Healthz = healthz.NewHandler()
 var Varz = varz.NewHandler()
 var DirectCh = make(chan net.Conn)
+var StreamzCh = make(chan []byte, 50)
 
 // Register a function providing healthz information. Function must be of the
 // form:
@@ -49,22 +51,27 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 // receipt of an os.Interrupt.
 //
 func ServeForever(port int) (err error) {
+	defer func() {
+		if vnet.SocketClosed(err) {
+			err = nil
+		}
+	}()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", defaultHandler)
-	mux.Handle("/healthz", Healthz)
-	mux.Handle("/varz", Varz)
-	mux.Handle("/direct", &direct.Handler{DirectCh})
+	mux.Handle("/healthz", logginghandler.New(Healthz, log.DEBUG))
+	mux.Handle("/varz", logginghandler.New(Varz, log.DEBUG))
+
+	sub := make(chan net.Conn)
+	mux.Handle("/streamz", &direct.Handler{sub})
+	streamz.Start(sub, StreamzCh)
+	go streamz.Ticker(StreamzCh)
 
 	addr := ":" + fmt.Sprint(port)
-	l, err := vnet.Listen("tcp", addr, os.Interrupt) // closed on SIGINT
+	l, err := vnet.Listen("tcp", addr, os.Interrupt)
 	if err != nil { return }
 
-	lh, err := logginghandler.New(mux, log.DEBUG)
-	if err != nil { return }
-	srv := &http.Server{Addr: addr, Handler: lh}
+	srv := &http.Server{Addr: addr, Handler: mux}
 	err = srv.Serve(l)
-	if vnet.SocketClosed(err) {
-		err = nil
-	}
 	return
 }
