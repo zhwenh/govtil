@@ -45,8 +45,8 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 
 // Serve on a given port
 //
-// The server log to the default logger and will gracefully terminate on receipt
-// of an os.Interrupt.
+// The server will log to the default logger and will gracefully terminate on
+// receipt of an os.Interrupt.
 //
 func ServeForever(port int) (err error) {
 	mux := http.NewServeMux()

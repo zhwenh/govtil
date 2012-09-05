@@ -1,6 +1,6 @@
 // Package multihandler provides an aggregating http.Handler for registering
 // multiple sources and collecting information from them in response to an
-// HTTP request. It is primarily used for healthz and varz services.
+// HTTP request. It is primarily used for varz services.
 package multihandler
 
 import (
@@ -17,6 +17,9 @@ import (
 // (i.e. handlerStatus != http.StatusOK), then one of the non-ok status codes
 // is arbitrarily chosen and returned as the status code for the original
 // response along with any data written.
+//
+// A zero-value MultiHandler is one that returns empty responses with StatusOK.
+//
 type MultiHandler struct {
 	sync.RWMutex
 	handlers []http.Handler
