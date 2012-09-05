@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -129,6 +128,9 @@ func (*muxConn) SetWriteDeadline(time.Time) error {
 	return errors.New("muxConn does not implement deadlines")
 }
 
+var ErrProtocol = errors.New("muxconn protocol error")
+var ErrTooLarge = errors.New("muxconn packet too large")
+
 // Split muxes a network connection into 'n' separate connections. It returns
 // a slice of 'n' connection proxies and an error.
 //
@@ -210,7 +212,8 @@ func doSplit(conn net.Conn, n int, makepipe func() (*io.PipeReader, *io.PipeWrit
 				return
 			}
 			if int(chno) >= n {
-				log.Fatal("muxconn: Receive got invalid mux channel ", chno)
+				err = ErrProtocol
+				return
 			}
 			var plen int
 			err = dec.Decode(&plen)
@@ -218,7 +221,8 @@ func doSplit(conn net.Conn, n int, makepipe func() (*io.PipeReader, *io.PipeWrit
 				return
 			}
 			if plen > defaultBufSize {
-				log.Fatal("muxconn: packet too large:", plen, "( max:", defaultBufSize, ")")
+				err = ErrTooLarge
+				return
 			}
 			sub_buffer := buffer[:plen]
 			err = dec.Decode(&sub_buffer)

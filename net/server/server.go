@@ -61,7 +61,7 @@ func newServeMux() *serveMux {
 // The server log to the default logger and will gracefully terminate on receipt
 // of an os.Interrupt.
 //
-func ServeForever(port int) {
+func ServeForever(port int) (err error) {
 	mux := newServeMux()
 	mux.HandleFunc("/", defaultHandler)
 	mux.Handle("/healthz", Healthz)
@@ -72,12 +72,13 @@ func ServeForever(port int) {
 	addr := ":" + fmt.Sprint(port)
 	l, err := vnet.Listen("tcp", addr, os.Interrupt)
 	if err != nil {
-		log.Fatal("Could not listen on address:", addr, ",", err)
+		return
 	}
 
 	srv := &http.Server{Addr: addr, Handler: mux}
 	err = srv.Serve(l)
-	if !vnet.SocketClosed(err) {
-		panic(err)
+	if vnet.SocketClosed(err) {
+		err = nil
 	}
+	return
 }

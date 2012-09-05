@@ -5,7 +5,6 @@ package direct
 
 import (
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -62,28 +61,29 @@ type Handler struct {
 func (dh *Handler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		log.Fatal("direct/Handler.ServeHTTP: ResponseWriter provided does not support Hijack()")
+		http.Error(w, "direct/Handler.ServeHTTP: ResponseWriter provided does not support Hijack()", http.StatusInternalServerError)
+		return
 	}
 	conn, _, err := hj.Hijack()
 	if err != nil {
-		log.Println("Could not hijack direct connection")
+		http.Error(w, "Could not hijack direct connection, " + err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = sendServerToken(conn)
 	if err != nil {
-		log.Println("server/directhandler: sending server token,", err)
+		http.Error(w, "server/directhandler: sending server token, " + err.Error(), http.StatusInternalServerError)
 		return
 	}
 	err = getClientToken(conn)
 	if err != nil {
-		log.Println("server/directhandler: getting client token,", err)
+		http.Error(w, "server/directhandler: getting client token, " + err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if dh.Chan != nil {
 		dh.Chan <- conn
 	} else {
-		log.Println("Direct connection request dropped, no handler channel")
+		http.Error(w, "Direct connection request dropped, no handler channel", http.StatusInternalServerError)
 	}
 }
 
