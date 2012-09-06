@@ -60,6 +60,11 @@ func V4() (GUID, error) {
 	if err != nil {
 		return ret, err
 	}
+	// Mix with something host- and time-dependent
+	for i := 0; i < GUIDLength; i++ {
+		ret[i] ^= baseGUID[i]
+	}
+
 	// Template: xxxxxxxx-xxxx-4xxx-Yxxx-xxxxxxxxxxxx where x is
 	// any hex value and Y is one of 8, 9, A or B
 	ret[6] = 0x40 + (ret[6] & 0x0f)
