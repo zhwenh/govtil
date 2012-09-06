@@ -42,7 +42,7 @@ type loggingHandler struct {
 
 // Called by http.Server
 func (lh *loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	g, err := guid.New()
+	g, err := guid.V4()
 	if err != nil {
 		http.Error(w, "couldn't create request GUID", http.StatusInternalServerError)
 		return

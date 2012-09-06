@@ -1,10 +1,12 @@
 package guid
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"time"
 	
@@ -12,8 +14,8 @@ import (
 )
 
 const GUIDLength = 16
-type sha1GUID [GUIDLength]byte
-var baseGUID sha1GUID
+type GUID [GUIDLength]byte
+var baseGUID GUID
 
 func init() {
 	// Create a time- and hardware address-based baseGUID
@@ -32,44 +34,55 @@ func init() {
 	copy(baseGUID[:], hasher.Sum(nil))
 }
 
-type GUID interface {
-	String() string
-	Short() string
-	Equals(GUID) bool
-	bytes() [GUIDLength]byte
-}
-
-func (sg *sha1GUID) String() string {
+// Return the GUID as a string in 8-4-4-4-12 format, e.g.
+//	"550e8400-e29b-41d4-a716-665544a6a71e"
+func (sg *GUID) String() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", sg[0:4], sg[4:6], sg[6:8], sg[8:10], sg[10:])
 }
 
-func (sg *sha1GUID) Short() string {
+// Return the GUID as a short string representing only the last 4 bytes, e.g.
+//	"44a6a71e"
+func (sg *GUID) Short() string {
 	return fmt.Sprintf("%x", sg[12:])
 }
 
-func (sg *sha1GUID) Equals(sg2 GUID) bool {
-	b := sg2.bytes()
-	return vbytes.Equals(sg[:], b[:])
+func (sg *GUID) Equals(sg2 *GUID) bool {
+	return vbytes.Equals(sg[:], sg2[:])
 }
 
-func (sg *sha1GUID) bytes() [GUIDLength]byte {
+func (sg *GUID) bytes() [GUIDLength]byte {
 	return *sg
 }
 
-func setV5(b []byte) {
-	// Fix bytes to resemble xxxxxxxx-xxxx-5xxx-Yxxx-xxxxxxxxxxxx where x is
-	// any hex value and Y is one of 8, 9, A or B
-	// 8 = 0
-	b[6] = 0x50 + (b[6] & 0x0f)
-	b[8] = 0x80 + (b[8] & 0x3f)
-}
-
-func New() (GUID, error) {
-	ret := new(sha1GUID)
+func V4() (GUID, error) {
+	ret := GUID{}
 	_, err := rand.Read(ret[:])
 	if err != nil {
 		return ret, err
 	}
-	setV5(ret[:])
+	// Template: xxxxxxxx-xxxx-4xxx-Yxxx-xxxxxxxxxxxx where x is
+	// any hex value and Y is one of 8, 9, A or B
+	ret[6] = 0x40 + (ret[6] & 0x0f)
+	ret[8] = 0x80 + (ret[8] & 0x3f)
 	return ret, nil
+}
+
+func V5FromReader(r io.Reader) (guid GUID, err error) {
+	ret := GUID{}
+	hasher := sha1.New()
+	_, err = io.Copy(hasher, r)
+	if err != nil {
+		return
+	}
+	copy(ret[:], hasher.Sum(nil))
+
+	// Template: xxxxxxxx-xxxx-5xxx-Yxxx-xxxxxxxxxxxx where x is
+	// any hex value and Y is one of 8, 9, A or B
+	ret[6] = 0x50 + (ret[6] & 0x0f)
+	ret[8] = 0x80 + (ret[8] & 0x3f)
+	return ret, nil
+}
+
+func V5FromBytes(b []byte) (guid GUID, err error) {
+	return V5FromReader(bytes.NewBuffer(b))
 }
