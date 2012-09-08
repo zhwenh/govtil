@@ -13,6 +13,8 @@
 package logginghandler
 
 import (
+	"bufio"
+	"net"
 	"net/http"
 	
 	"github.com/vsekhar/govtil/guid"
@@ -33,6 +35,10 @@ func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
 func (lrw *loggingResponseWriter) WriteHeader(i int) {
 	log.Logf(lrw.loglevel, "HTTP(%s) writing header %d", lrw.guid.Short(), i)
 	lrw.ResponseWriter.WriteHeader(i)
+}
+
+func (lh *loggingResponseWriter) Hijack() (c net.Conn, rw *bufio.ReadWriter, err error) {
+	return lh.ResponseWriter.(http.Hijacker).Hijack()
 }
 
 type loggingHandler struct {
