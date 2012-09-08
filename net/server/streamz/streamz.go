@@ -12,6 +12,8 @@ import (
 
 var ErrOverflow = errors.New("Streamz buffer overflow")
 
+const Timeout = 30 * time.Second
+
 func Ticker(pub chan []byte) {
 	t := time.Tick(2 * time.Second)
 	var tocker bool = false
@@ -29,28 +31,32 @@ func Ticker(pub chan []byte) {
 
 func DispatchForever(subs chan net.Conn, pub chan []byte) {
 	sublist := make([]net.Conn, 0)
-	marks := make([]int, 0)
 	for {
 		select {
 			case sub := <-subs:
 				sublist = append(sublist, sub)
 			case data := <-pub:
-				for i, sub := range sublist {
-					_, err := sub.Write(data) // do concurrently ??
-					if err != nil {
-						marks = append(marks, i)
-					}
+				retch := make(chan net.Conn)
+				subcount := len(sublist)
+				for _, sub := range sublist {
+					go func(sub net.Conn) {
+						sub.SetDeadline(time.Now().Add(Timeout))
+						_, err := sub.Write(data)
+						if err != nil {
+							log.Debug("streamz timeout writing to", sub.RemoteAddr().String(), ":", err)
+							retch <- nil
+						} else {
+							retch <- sub
+						}
+					}(sub)
 				}
 
-				// sweep (from the back)
-				l := len(sublist)
-				for len(marks) > 0 {
-					i := marks[len(marks)-1]
-					sublist[i].Close()
-					sublist[i] = sublist[l-1]
-					sublist = sublist[:l-1]
-					marks = marks[:len(marks)-1]
-					l--
+				sublist = sublist[:0]
+				for i := 0; i < subcount; i++ {
+					sub := <-retch
+					if sub != nil {
+						sublist = append(sublist, <-retch)
+					}
 				}
 		}
 	}
