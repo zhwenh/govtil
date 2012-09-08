@@ -1,6 +1,7 @@
 // Package direct provides an http.Handler and Dial'er for establishing a
 // direct TCP connection to a server via its HTTP server. This allows arbitrary
-// socket connections without needing to open additional ports on the server. 
+// socket connections without needing to open additional ports on the server.
+// It is primarily used by the streamz implementation.
 package direct
 
 import (
