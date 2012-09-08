@@ -83,6 +83,8 @@ type StreamzSample struct {
 	Value string
 }
 
+// Parse a client connection to a streamz server and push StreamzSample's onto
+// provided channel. On error, will close the channel.
 func Channelify(conn net.Conn) chan StreamzSample {
 	ch := make(chan StreamzSample)
 	bio := bufio.NewReader(conn)
@@ -91,14 +93,17 @@ func Channelify(conn net.Conn) chan StreamzSample {
 		for {
 			line, isprefix, err := bio.ReadLine()
 			if err != nil {
+				log.Println("streamz: error reading line")
 				return
 			}
 			if isprefix {
-				log.Fatal("Streamz line too long, dying")
+				log.Println("streamz: line too long, dying")
+				return
 			}
 			parts := bytes.Split(line, []byte("="))
 			if len(parts) != 2 {
-				log.Fatal("Malformed streamz entry:", line)
+				log.Println("streamz: malformed entry:", line)
+				return
 			}
 			ch <- StreamzSample{Key: string(parts[0]), Value: string(parts[1])}
 		}
