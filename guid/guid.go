@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 	
 	vbytes "github.com/vsekhar/govtil/bytes"
@@ -23,14 +24,16 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	if len(ifs) == 0 {
-		panic(errors.New("No hardware network interfaces detected"))
+	b := make([]byte, 0)
+	for _,i := range ifs {
+		b = append(b, i.HardwareAddr...)
+	}
+	if len(b) == 0 || strings.TrimSpace(string(b)) == "" {
+		panic(errors.New("guid: Empty hardware address list"))
 	}
 	hasher := sha1.New()
-	hasher.Write([]byte(time.Now().String()))
-	for _,i := range ifs {
-		hasher.Write(i.HardwareAddr)
-	}
+	io.WriteString(hasher, time.Now().String())
+	hasher.Write(b)
 	copy(baseGUID[:], hasher.Sum(nil))
 }
 
