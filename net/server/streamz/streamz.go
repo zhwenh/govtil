@@ -29,7 +29,7 @@ func Ticker(pub chan []byte) {
 	}
 }
 
-func DispatchForever(subs chan net.Conn, pub chan []byte) {
+func DispatchForever(subs <-chan net.Conn, pub <-chan []byte) {
 	sublist := make([]net.Conn, 0)
 	for {
 		select {
