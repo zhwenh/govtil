@@ -22,40 +22,27 @@ import (
 
 // TODO: testing using net/http/httptest
 
+// Healthz handler. Use Healthz.Register() to register a healthz function
 var Healthz = healthz.NewHandler()
+
+// Varz handler. Use Varz.Register() to register a varz function
 var Varz = varz.NewHandler()
-var DirectCh = make(chan net.Conn)
+
+// StreamzCh is a chan []byte to which streamz values should be written. Use
+// govtil/net/server/streamz.Write() to write to this channel on the server.
 var StreamzCh = make(chan []byte, 50)
+
+// RPC is an rpc.Server that handles connections received at the /birpc URL.
+// Use RPC.Register() to register method receivers.
 var RPC = rpc.NewServer()
+
+// RPCClientCh is a chan *rpc.Client from which RPC clients should be read.
+// These clients are produced by birpc from incoming connections.
 var RPCClientsCh = make(chan *rpc.Client, 50)
 
-// Register a function providing healthz information. Function must be of the
-// form:
-//	func myHealthzFunc() bool {...}
-//
-func RegisterHealthz(f healthz.HealthzFunc, name string) {
-	Healthz.Register(f, name)
-}
-
-// Register a function that writes varz information. Function must be of the
-// form:
-//	func myVarzFunc(io.Writer) error {...}
-//
-func RegisterVarz(f varz.VarzFunc, name string) {
-	Varz.Register(f, name)
-}
-
-func RegisterRPC(rcvr interface{}) error {
-	return RPC.Register(rcvr)
-}
-
-func RegisterRPCName(name string, rcvr interface{}) error {
-	return RPC.RegisterName(name, rcvr)
-}
-
-// placeholder request handler
+// A placeholder root request handler
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "<h1>govtil/net/server %s!</h1>", r.URL.Path[1:])
+	fmt.Fprintf(w, "govtil/net/server %s!", r.URL.Path[1:])
 }
 
 // Serve on a given port
