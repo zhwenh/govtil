@@ -16,13 +16,13 @@ import (
 	"bufio"
 	"net"
 	"net/http"
-	
+
 	"github.com/vsekhar/govtil/guid"
 	"github.com/vsekhar/govtil/log"
 )
 
 type loggingResponseWriter struct {
-	guid guid.GUID
+	guid     guid.GUID
 	loglevel log.Level
 	http.ResponseWriter
 }
@@ -50,12 +50,14 @@ type loggingHandler struct {
 func (lh *loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	g, err := guid.V4()
 	if err != nil {
-		http.Error(w, "couldn't create request GUID", http.StatusInternalServerError)
+		msg := "logginghandler: couldn't create request GUID"
+		log.Errorln(msg)
+		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
 	rw := &loggingResponseWriter{g, lh.loglevel, w}
 	log.Logf(lh.loglevel, "HTTP(%s) %s from %s for %s", g.Short(), r.Method, r.RemoteAddr, r.URL)
-	lh.Handler.ServeHTTP(rw,r)
+	lh.Handler.ServeHTTP(rw, r)
 }
 
 // Create a new logging handler and log at the specified level (see govtil/log
