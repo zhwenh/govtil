@@ -9,10 +9,13 @@ import (
 	_ "net/http/pprof"
 	"net/rpc"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/vsekhar/govtil/log"
 	vnet "github.com/vsekhar/govtil/net"
 	"github.com/vsekhar/govtil/net/server/birpc"
+	"github.com/vsekhar/govtil/net/server/borkborkbork"
 	"github.com/vsekhar/govtil/net/server/direct"
 	"github.com/vsekhar/govtil/net/server/healthz"
 	"github.com/vsekhar/govtil/net/server/logginghandler"
@@ -45,26 +48,7 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "govtil/net/server %s!", r.URL.Path[1:])
 }
 
-// Serve on a given port
-//
-// The server will log to the default logger and will gracefully terminate on
-// receipt of an os.Interrupt.
-//
-// The following URLs are defined:
-//    /
-//    /healthz
-//    /varz
-//    /streamz
-//    /birpc
-//    /debug/pprof
-//
-func ServeForever(port int) (err error) {
-	defer func() {
-		if vnet.SocketClosed(err) {
-			err = nil
-		}
-	}()
-
+func init() {
 	http.Handle("/", logginghandler.New(http.HandlerFunc(defaultHandler), log.NORMAL))
 	http.Handle("/healthz", logginghandler.New(Healthz, log.NORMAL))
 	http.Handle("/varz", logginghandler.New(Varz, log.NORMAL))
@@ -80,16 +64,58 @@ func ServeForever(port int) (err error) {
 	go streamz.DispatchForever(subs, StreamzCh)
 	go streamz.Ticker(StreamzCh)
 
+	killHandler := logginghandler.New(borkborkbork.New(syscall.SIGKILL), log.NORMAL)
+	intHandler := logginghandler.New(borkborkbork.New(syscall.SIGINT), log.NORMAL)
+	http.Handle("/killkillkill", killHandler)
+	http.Handle("/intintint", intHandler)
+}
+
+// Serve on a given port
+//
+// The server will log to the default logger and will gracefully terminate on
+// receipt of an interrupt or kill signal.
+//
+// The following URLs are defined:
+//    /
+//    /healthz
+//    /varz
+//    /streamz
+//    /birpc
+//    /debug/pprof
+//
+func ServeForever(port int) error {
 	addr := ":" + fmt.Sprint(port)
-	l, err := vnet.Listen("tcp", addr, os.Interrupt)
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Println("govtil/net/server: Failed to listen on", port, err)
-		return
+		log.Errorln("govtil/net/server: Failed to listen on", port, err)
+		return err
 	}
 
+	// Close listen port on exit (causes http.Serve() to return)
+	sigch := make(chan os.Signal)
+	signal.Notify(sigch, []os.Signal{
+		syscall.SIGABRT,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGKILL,
+		syscall.SIGPWR,
+		syscall.SIGQUIT,
+		syscall.SIGSTOP,
+		syscall.SIGTERM,
+	}...)
+	go func() {
+		sig := <-sigch
+		log.Println("govtil/net/server: Closing listen port", l.Addr().String(), "due to signal", sig)
+		l.Close()
+	}()
 	err = http.Serve(l, nil)
 	if err != nil {
-		log.Println("govtil/net/server: Server terminated with error", err)
+		if vnet.SocketClosed(err) {
+			err = nil // closed due to signal, no error
+		} else {
+			log.Errorln("govtil/net/server:", err)
+		}
 	}
-	return
+	log.Println("govtil/net/server: Terminating")
+	return err
 }
