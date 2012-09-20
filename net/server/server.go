@@ -49,13 +49,13 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func init() {
-	http.Handle("/", logginghandler.New(http.HandlerFunc(defaultHandler), log.NORMAL))
-	http.Handle("/healthz", logginghandler.New(Healthz, log.NORMAL))
-	http.Handle("/varz", logginghandler.New(Varz, log.NORMAL))
+	http.Handle("/", http.HandlerFunc(defaultHandler))
+	http.Handle("/healthz", Healthz)
+	http.Handle("/varz", Varz)
 
 	// birpc
 	birpcconns := make(chan net.Conn)
-	http.Handle("/birpc", logginghandler.New(&direct.Handler{birpcconns}, log.NORMAL))
+	http.Handle("/birpc", &direct.Handler{birpcconns})
 	go birpc.DispatchForever(birpcconns, RPC, RPCClientsCh)
 
 	// streamz
@@ -64,8 +64,8 @@ func init() {
 	go streamz.DispatchForever(subs, StreamzCh)
 	go streamz.Ticker(StreamzCh)
 
-	killHandler := logginghandler.New(borkborkbork.New(syscall.SIGKILL), log.NORMAL)
-	intHandler := logginghandler.New(borkborkbork.New(syscall.SIGINT), log.NORMAL)
+	killHandler := borkborkbork.New(syscall.SIGKILL)
+	intHandler := borkborkbork.New(syscall.SIGINT)
 	http.Handle("/killkillkill", killHandler)
 	http.Handle("/intintint", intHandler)
 }
@@ -108,7 +108,9 @@ func ServeForever(port int) error {
 		log.Println("govtil/net/server: Closing listen port", l.Addr().String(), "due to signal", sig)
 		l.Close()
 	}()
-	err = http.Serve(l, nil)
+
+	logginghandler := logginghandler.New(http.DefaultServeMux, log.NORMAL)
+	err = http.Serve(l, logginghandler)
 	if err != nil {
 		if vnet.SocketClosed(err) {
 			err = nil // closed due to signal, no error
