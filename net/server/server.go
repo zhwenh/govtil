@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/vsekhar/govtil/log"
+	"github.com/vsekhar/govtil/mem"
 	vnet "github.com/vsekhar/govtil/net"
 	"github.com/vsekhar/govtil/net/server/birpc"
 	"github.com/vsekhar/govtil/net/server/borkborkbork"
@@ -68,6 +69,12 @@ func init() {
 	intHandler := borkborkbork.New(syscall.SIGINT)
 	http.Handle("/killkillkill", killHandler)
 	http.Handle("/intintint", intHandler)
+
+	// mem
+	Varz.Register(mem.Varz, "mem")
+	http.HandleFunc("/create", mem.Create)
+	http.HandleFunc("/delete", mem.Delete)
+	http.HandleFunc("/gc", mem.GC)
 }
 
 // Serve on a given port
@@ -91,7 +98,7 @@ func ServeForever(port int) error {
 		return err
 	}
 
-	// Close listen port on exit (causes http.Serve() to return)
+	// Close listen port on signals (causes http.Serve() to return)
 	sigch := make(chan os.Signal)
 	signal.Notify(sigch, []os.Signal{
 		syscall.SIGABRT,
