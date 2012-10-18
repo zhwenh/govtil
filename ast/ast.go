@@ -25,7 +25,11 @@ func (im *objManager) Hash(o *stdast.Object) []byte {
 	return r
 }
 
-func Hash(n *stdast.File) ([]byte, error) {
+// SemanticHash returns a semantic hash of a parsed Go file.
+//
+// You can generate the File object by parsing a Go file using
+// ParseFile in the go/parser package.
+func SemanticHash(n *stdast.File) ([]byte, error) {
 	hv := &hashVisitor{
 		hashes: [][]byte{},
 		parent: nil,
@@ -35,7 +39,7 @@ func Hash(n *stdast.File) ([]byte, error) {
 	if hv.err != nil {
 		return nil, hv.err
 	}
-	return hv.Sum(nil), nil
+	return hv.sum(nil), nil
 }
 
 type byteSliceSlice [][]byte
@@ -69,21 +73,12 @@ func (hv *hashVisitor) addString(s string) {
 	hv.add([]byte(s))
 }
 
-func (hv *hashVisitor) setError(err error) {
-	hv.err = err
-}
-
-const (
-	ordered = iota
-	unordered
-)
-
 func (hv *hashVisitor) Visit(n stdast.Node) stdast.Visitor {
 	// terminate if no more children (n==nil) or error
 	if n == nil || hv.err != nil {
 		if hv.parent != nil {
 			hv.parent.err = hv.err
-			hv.parent.add(hv.Sum(nil))
+			hv.parent.add(hv.sum(nil))
 		}
 		return nil
 	}
@@ -197,7 +192,7 @@ func (hv *hashVisitor) Visit(n stdast.Node) stdast.Visitor {
 	}
 }
 
-func (hv *hashVisitor) Sum(b []byte) []byte {
+func (hv *hashVisitor) sum(b []byte) []byte {
 	if !hv.ordered {
 		sort.Sort(hv.hashes)
 	}
