@@ -48,7 +48,7 @@ func TestAST(t *testing.T) {
 		t.Fatal(err)
 	}
 	//stdast.Print(fset, tree)
-	hash, err := hashAST(tree)
+	hash, err := Hash(tree)
 	if err != nil {
 		t.Fatal(err)
 	}

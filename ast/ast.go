@@ -25,8 +25,8 @@ func (im *objManager) Hash(o *stdast.Object) []byte {
 	return r
 }
 
-func hashAST(n *stdast.File) ([]byte, error) {
-	hv := &HashVisitor{
+func Hash(n *stdast.File) ([]byte, error) {
+	hv := &hashVisitor{
 		hashes: [][]byte{},
 		parent: nil,
 		err:    nil,
@@ -52,33 +52,24 @@ func (bss byteSliceSlice) Swap(i, j int) {
 	bss[i], bss[j] = bss[j], bss[i]
 }
 
-func newHashVisitor(ordered bool, parent *HashVisitor) *HashVisitor {
-	return &HashVisitor{
-		hashes:  [][]byte{},
-		parent:  parent,
-		err:     nil,
-		ordered: ordered,
-	}
-}
-
-// HashVisitor implements a tree visitor that performs an ordered or unordered
+// hashVisitor implements a tree visitor that performs an ordered or unordered
 // hash over a collection of sub elements
-type HashVisitor struct {
+type hashVisitor struct {
 	hashes  byteSliceSlice
-	parent  *HashVisitor
+	parent  *hashVisitor
 	err     error
 	ordered bool
 }
 
-func (hv *HashVisitor) add(b []byte) {
+func (hv *hashVisitor) add(b []byte) {
 	hv.hashes = append(hv.hashes, b)
 }
 
-func (hv *HashVisitor) addString(s string) {
+func (hv *hashVisitor) addString(s string) {
 	hv.add([]byte(s))
 }
 
-func (hv *HashVisitor) setError(err error) {
+func (hv *hashVisitor) setError(err error) {
 	hv.err = err
 }
 
@@ -87,7 +78,7 @@ const (
 	unordered
 )
 
-func (hv *HashVisitor) Visit(n stdast.Node) stdast.Visitor {
+func (hv *hashVisitor) Visit(n stdast.Node) stdast.Visitor {
 	// terminate if no more children (n==nil) or error
 	if n == nil || hv.err != nil {
 		if hv.parent != nil {
@@ -198,7 +189,7 @@ func (hv *HashVisitor) Visit(n stdast.Node) stdast.Visitor {
 	}
 
 	// spawn a visitor for my children, pointing back to me
-	return &HashVisitor{
+	return &hashVisitor{
 		hashes:  [][]byte{},
 		parent:  hv,
 		err:     nil,
@@ -206,7 +197,7 @@ func (hv *HashVisitor) Visit(n stdast.Node) stdast.Visitor {
 	}
 }
 
-func (hv *HashVisitor) Sum(b []byte) []byte {
+func (hv *hashVisitor) Sum(b []byte) []byte {
 	if !hv.ordered {
 		sort.Sort(hv.hashes)
 	}
