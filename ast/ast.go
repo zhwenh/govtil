@@ -10,21 +10,6 @@ import (
 	"sort"
 )
 
-type objManager struct {
-	objs map[*stdast.Object][]byte
-	i    int
-}
-
-func (im *objManager) Hash(o *stdast.Object) []byte {
-	r, ok := im.objs[o]
-	if !ok {
-		r = []byte(fmt.Sprint(im.i))
-		im.objs[o] = r
-		im.i++
-	}
-	return r
-}
-
 // SemanticHash returns a semantic hash of a parsed Go file.
 //
 // You can generate the File object by parsing a Go file using
