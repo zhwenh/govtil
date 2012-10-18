@@ -1,10 +1,11 @@
 package ast
 
 import (
+	"bytes"
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	stdast "go/ast"
-	"hash"
 	"reflect"
 	"sort"
 )
@@ -24,318 +25,194 @@ func (im *objManager) Hash(o *stdast.Object) []byte {
 	return r
 }
 
-func hashAST(n stdast.Node) ([]byte, error) {
-	h := sha1.New()
-	ids := &objManager{make(map[*stdast.Object][]byte), 0}
-	if err := doHashAST(n, h, ids); err != nil {
-		return nil, err
+func hashAST(n *stdast.File) ([]byte, error) {
+	hv := &HashVisitor{
+		hashes: [][]byte{},
+		parent: nil,
+		err:    nil,
 	}
-	return h.Sum(nil), nil
+	stdast.Walk(hv, n)
+	if hv.err != nil {
+		return nil, hv.err
+	}
+	return hv.Sum(nil), nil
 }
 
-type nameIndex struct {
-	name string
-	idx  int
+type byteSliceSlice [][]byte
+
+func (bss byteSliceSlice) Len() int {
+	return len(bss)
 }
 
-type nameIndexes []*nameIndex
+func (bss byteSliceSlice) Less(i, j int) bool {
+	return bytes.Compare(bss[i], bss[j]) == -1
+}
 
-func (n nameIndexes) Len() int           { return len(n) }
-func (n nameIndexes) Less(i, j int) bool { return n[i].name < n[j].name }
-func (n nameIndexes) Swap(i, j int)      { n[i], n[j] = n[j], n[i] }
+func (bss byteSliceSlice) Swap(i, j int) {
+	bss[i], bss[j] = bss[j], bss[i]
+}
 
-func doHashAST(n stdast.Node, h hash.Hash, objs *objManager) error {
-	h.Write([]byte(fmt.Sprint(reflect.TypeOf(n).Elem().Name())))
+func newHashVisitor(ordered bool, parent *HashVisitor) *HashVisitor {
+	return &HashVisitor{
+		hashes:  [][]byte{},
+		parent:  parent,
+		err:     nil,
+		ordered: ordered,
+	}
+}
 
+// HashVisitor implements a tree visitor that performs an ordered or unordered
+// hash over a collection of sub elements
+type HashVisitor struct {
+	hashes  byteSliceSlice
+	parent  *HashVisitor
+	err     error
+	ordered bool
+}
+
+func (hv *HashVisitor) add(b []byte) {
+	hv.hashes = append(hv.hashes, b)
+}
+
+func (hv *HashVisitor) addString(s string) {
+	hv.add([]byte(s))
+}
+
+func (hv *HashVisitor) setError(err error) {
+	hv.err = err
+}
+
+const (
+	ordered = iota
+	unordered
+)
+
+func (hv *HashVisitor) Visit(n stdast.Node) stdast.Visitor {
+	// terminate if no more children (n==nil) or error
+	if n == nil || hv.err != nil {
+		if hv.parent != nil {
+			hv.parent.err = hv.err
+			hv.parent.add(hv.Sum(nil))
+		}
+		return nil
+	}
+
+	// hash myself
+	hv.addString(fmt.Sprint(reflect.TypeOf(n).Elem().Name()))
+	orderedChildren := false
 	switch v := n.(type) {
 
-	case *stdast.File:
-		// imports (sort then hash since import order doesn't matter)
-		paths := make([]string, 0)
-		for _, v2 := range v.Imports {
-			paths = append(paths, v2.Path.Value)
-		}
-		var spaths sort.StringSlice = paths
-		spaths.Sort()
-		for _, p := range paths {
-			h.Write([]byte(p))
-		}
-
-		// declarations
-		for _, v2 := range v.Decls {
-			if err := doHashAST(v2, h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.GenDecl:
-		for _, v2 := range v.Specs {
-			if err := doHashAST(v2, h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.ImportSpec:
-		// handled in *stdast.File
-		break
-
-	case *stdast.ValueSpec:
-		// has n names, a type and n values (matched by indexes)
-		// 1) hash type
-		// 2) sort names
-		// 3) hash each name and its value in sorted order
-		if err := doHashAST(v.Type, h, objs); err != nil {
-			return err
-		}
-		names := make(nameIndexes, 0)
-		for i, n := range v.Names {
-			names = append(names, &nameIndex{n.Name, i})
-		}
-		sort.Sort(names)
-		for _, ni := range names {
-			if err := doHashAST(v.Names[ni.idx], h, objs); err != nil {
-				return err
-			}
-			if err := doHashAST(v.Values[ni.idx], h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.Ident:
-		if v.Obj != nil {
-			h.Write(objs.Hash(v.Obj))
-		} else {
-			h.Write([]byte(v.Name))
-		}
+	// these tree elements have some internal content in addition to their
+	// children
+	case *stdast.AssignStmt:
+		hv.addString(fmt.Sprint(v.Tok))
+		orderedChildren = true
 
 	case *stdast.BasicLit:
-		h.Write([]byte(fmt.Sprint(v.Value)))
-
-	case *stdast.CompositeLit:
-		if err := doHashAST(v.Type, h, objs); err != nil {
-			return err
-		}
-		for _, e := range v.Elts {
-			if err := doHashAST(e, h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.ParenExpr:
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.FuncDecl:
-		if v.Recv != nil {
-			if err := doHashAST(v.Recv, h, objs); err != nil {
-				return err
-			}
-		}
-		h.Write(objs.Hash(v.Name.Obj))
-		if err := doHashAST(v.Type, h, objs); err != nil {
-			return err
-		}
-		// body
-		if err := doHashAST(v.Body, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.FuncType:
-		// params
-		if v.Params != nil {
-			if err := doHashAST(v.Params, h, objs); err != nil {
-				return err
-			}
-		}
-		if v.Results != nil {
-			if err := doHashAST(v.Results, h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.FieldList:
-		for _, f := range v.List {
-			for _, n := range f.Names {
-				h.Write(objs.Hash(n.Obj))
-			}
-			// hash count and type
-			h.Write([]byte(fmt.Sprint("%d", len(f.Names))))
-			if err := doHashAST(f.Type, h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.BlockStmt:
-		for _, s := range v.List {
-			if err := doHashAST(s, h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.ExprStmt:
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.IncDecStmt:
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
-		h.Write([]byte(fmt.Sprint(v.Tok)))
-
-	case *stdast.CallExpr:
-		if err := doHashAST(v.Fun, h, objs); err != nil {
-			return err
-		}
-		for _, a := range v.Args {
-			if err := doHashAST(a, h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.UnaryExpr:
-		h.Write([]byte(fmt.Sprint(v.Op)))
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
+		hv.addString(fmt.Sprint(v.Value))
 
 	case *stdast.BinaryExpr:
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
-		h.Write([]byte(fmt.Sprint(v.Op)))
-		if err := doHashAST(v.Y, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.SelectorExpr:
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
-		if err := doHashAST(v.Sel, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.StarExpr:
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.IndexExpr:
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
-		if err := doHashAST(v.Index, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.TypeAssertExpr:
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.IfStmt:
-		if err := doHashAST(v.Cond, h, objs); err != nil {
-			return err
-		}
-		if err := doHashAST(v.Body, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.AssignStmt:
-		for _, e := range v.Lhs {
-			if err := doHashAST(e, h, objs); err != nil {
-				return err
-			}
-		}
-		h.Write([]byte(fmt.Sprint(v.Tok)))
-		for _, e := range v.Rhs {
-			if err := doHashAST(e, h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.TypeSwitchStmt:
-		if err := doHashAST(v.Assign, h, objs); err != nil {
-			return err
-		}
-		if err := doHashAST(v.Body, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.CaseClause:
-		for _, e := range v.List {
-			if err := doHashAST(e, h, objs); err != nil {
-				return err
-			}
-		}
-		for _, s := range v.Body {
-			if err := doHashAST(s, h, objs); err != nil {
-				return err
-			}
-		}
-
-	case *stdast.RangeStmt:
-		if err := doHashAST(v.Key, h, objs); err != nil {
-			return err
-		}
-		if err := doHashAST(v.Value, h, objs); err != nil {
-			return err
-		}
-		if err := doHashAST(v.X, h, objs); err != nil {
-			return err
-		}
-		if err := doHashAST(v.Body, h, objs); err != nil {
-			return err
-		}
-
-	case *stdast.DeclStmt:
-		if err := doHashAST(v.Decl, h, objs); err != nil {
-			return err
-		}
+		hv.addString(fmt.Sprint(v.Op))
+		orderedChildren = true
 
 	case *stdast.BranchStmt:
-		h.Write([]byte(fmt.Sprint(v.Tok)))
+		hv.addString(fmt.Sprint(v.Tok))
 
-	case *stdast.ReturnStmt:
-		for _, r := range v.Results {
-			if err := doHashAST(r, h, objs); err != nil {
-				return err
-			}
-		}
+	case *stdast.ChanType:
+		hv.addString(fmt.Sprint(v.Dir))
 
-	case *stdast.TypeSpec:
-		if err := doHashAST(v.Name, h, objs); err != nil {
-			return err
-		}
-		if err := doHashAST(v.Type, h, objs); err != nil {
-			return err
-		}
+	case *stdast.GenDecl:
+		hv.addString(fmt.Sprint(v.Tok))
 
-	case *stdast.StructType:
-		if err := doHashAST(v.Fields, h, objs); err != nil {
-			return err
-		}
-		if v.Incomplete {
-			h.Write([]byte("Incomplete"))
-		}
+	case *stdast.Ident:
+		// TODO(vsekhar): match by identity via v.Obj (*stdast.Object)
+		hv.addString(v.Name)
 
-	case *stdast.MapType:
-		if err := doHashAST(v.Key, h, objs); err != nil {
-			return err
-		}
-		if err := doHashAST(v.Value, h, objs); err != nil {
-			return err
-		}
-
+	// these tree elements have no content other than their children
 	case *stdast.ArrayType:
-		if err := doHashAST(v.Elt, h, objs); err != nil {
-			return err
-		}
+	case *stdast.BlockStmt:
+		orderedChildren = true
+	case *stdast.CallExpr:
+		orderedChildren = true
+	case *stdast.CaseClause:
+		orderedChildren = true // though only for the statements...
+	case *stdast.CommClause:
+		orderedChildren = true
+	case *stdast.CompositeLit:
+		orderedChildren = true
+	case *stdast.DeclStmt:
+	case *stdast.Ellipsis:
+	case *stdast.EmptyStmt:
+	case *stdast.ExprStmt:
+	case *stdast.Field:
+	case *stdast.FieldList:
+		// for function signatures and non-named initialisations
+		orderedChildren = true
+	case *stdast.File:
+	case *stdast.ForStmt:
+		orderedChildren = true
+	case *stdast.FuncDecl:
+		orderedChildren = true
+	case *stdast.FuncType:
+	case *stdast.GoStmt:
+	case *stdast.IfStmt:
+		orderedChildren = true
+	case *stdast.ImportSpec:
+	case *stdast.IncDecStmt:
+	case *stdast.IndexExpr:
+		// consider an indexable type indexed by another indexable type,
+		// they could feasibly swap places, with different symantics
+		orderedChildren = true
+	case *stdast.InterfaceType: // incomplete == error
+	case *stdast.KeyValueExpr:
+		orderedChildren = true
+	case *stdast.MapType:
+		orderedChildren = true
+	case *stdast.ParenExpr:
+		orderedChildren = true
+	case *stdast.RangeStmt:
+		orderedChildren = true
+	case *stdast.ReturnStmt:
+		orderedChildren = true
+	case *stdast.SelectorExpr:
+		orderedChildren = true
+	case *stdast.SendStmt:
+		orderedChildren = true
+	case *stdast.SliceExpr:
+		orderedChildren = true
+	case *stdast.StarExpr:
+	case *stdast.StructType: // incomplete == error
+	case *stdast.TypeAssertExpr:
+		orderedChildren = true
+	case *stdast.TypeSpec:
+	case *stdast.TypeSwitchStmt:
+		orderedChildren = true
+	case *stdast.UnaryExpr:
+	case *stdast.ValueSpec:
+		orderedChildren = true
 
 	default:
-		return fmt.Errorf("hastAST: unknown type *%s", reflect.TypeOf(n).Elem().Name())
+		msg := fmt.Sprintf("hashAST: unknown type *%s, terminated early", reflect.TypeOf(n).Elem().Name())
+		hv.err = errors.New(msg)
+		return nil
 	}
-	return nil
+
+	// spawn a visitor for my children, pointing back to me
+	return &HashVisitor{
+		hashes:  [][]byte{},
+		parent:  hv,
+		err:     nil,
+		ordered: orderedChildren,
+	}
+}
+
+func (hv *HashVisitor) Sum(b []byte) []byte {
+	if !hv.ordered {
+		sort.Sort(hv.hashes)
+	}
+	h := sha1.New()
+	for _, curHash := range hv.hashes {
+		h.Write(curHash)
+	}
+	return h.Sum(b)
 }

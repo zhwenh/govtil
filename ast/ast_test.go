@@ -2,34 +2,40 @@ package ast
 
 import (
 	"bytes"
-	stdast "go/ast"
+	//stdast "go/ast"
 	"go/parser"
 	"go/token"
-	//	"os"
+	//"os"
 	"testing"
 )
 
 var data []byte = []byte(`
 package test
-import "fmt"
 import "errors"
+import "fmt"
 
-var st string = "dingo"
 var it int = (4 + 8)
+var st string = "dingo"
 
 var s1, s2 string = "string1", "string2"
+
+func inc() {
+	it++
+}
+
+func caller() {
+	blah(1, "?")
+}
 
 func blah(j int, _ string) int {
 	fmt.Println("blah")
 	fmt.Println(j)
 	if j > 6 {
-	errors.New("blah")
+		errors.New("blah")
 	}
+	var i int
+	j = i
 	return 6
-}
-
-func caller() {
-	blah(1, "?")
 }
 `)
 
@@ -41,7 +47,7 @@ func TestAST(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stdast.Print(fset, tree)
+	//stdast.Print(fset, tree)
 	hash, err := hashAST(tree)
 	if err != nil {
 		t.Fatal(err)
