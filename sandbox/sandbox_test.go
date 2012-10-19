@@ -11,13 +11,17 @@ import (
 
 // invoke sandbox go command on test module
 func TestSandbox(t *testing.T) {
+	// go test always sets the working directory to the directory containing
+	// the package being tested.
 	pwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	goroot := filepath.Join(pwd, "go")
 	gocc := filepath.Join(goroot, "bin/go")
 	testpkg := "./test"
+
 	cmd := exec.Command(gocc, "test", testpkg, "-test.v")
 	cmd.Env = []string{
 		"GOROOT="+goroot,
@@ -26,10 +30,9 @@ func TestSandbox(t *testing.T) {
 	b := bytes.NewBuffer(nil)
 	cmd.Stdout = b
 	cmd.Stderr = b
-	fmt.Println(cmd)
 	err = cmd.Run()
-	fmt.Print(b.String())
 	if err != nil {
+		fmt.Print(b.String())
 		t.Error(err)
 	}
 }

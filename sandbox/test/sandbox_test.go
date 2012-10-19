@@ -1,3 +1,8 @@
+/*
+Package test is compiled using the sandbox compiler and library. This package
+attempts each operation that is not permitted in the sandbox and fails its test
+if any of these operations succeeds.
+*/
 package test
 
 import (
