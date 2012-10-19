@@ -1,0 +1,4 @@
+# go compiled files
+go/.hg
+go/bin
+go/pkg
