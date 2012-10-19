@@ -1,4 +1,8 @@
-# go compiled files
-go/.hg
-go/bin
-go/pkg
+# keep only go/src and legal files
+go/*
+!go/src
+!go/AUTHORS
+!go/CONTRIBUTORS
+!go/LICENSE
+!go/PATENTS
+!go/README
