@@ -311,8 +311,11 @@ func TestRPCDropClientConn(t *testing.T) {
 
 	outconn.Close()
 	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
-	if err != io.EOF {
-		t.Errorf("RPC call on closed MuxConn client did not fail with io.EOF: %s", err.Error())
+
+	// Don't check for io.EOF, since some earlier versions of Go return
+	// "invalid argument" and other errors straight from the OS
+	if err == nil {
+		t.Errorf("RPC call on closed MuxConn client did not fail)
 	}
 }
 
@@ -342,8 +345,11 @@ func TestRPCDropServerConn(t *testing.T) {
 	outconn.Close()
 	inconn.Close()
 	err = client.Call("RPCRecv.Echo", &sdata, &rdata)
-	if err != io.EOF {
-		t.Errorf("RPC call on closed MuxConn client did not fail with io.EOF: %s", err.Error())
+
+	// Don't check for io.EOF, since some earlier versions of Go return
+	// "invalid argument" and other errors straight from the OS
+	if err == nil {
+		t.Errorf("RPC call on closed MuxConn client did not fail")
 	}
 }
 
