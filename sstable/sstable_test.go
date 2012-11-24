@@ -38,11 +38,11 @@ func TestSSTable(t *testing.T) {
 	defer os.Remove(f.Name())
 
 	f.Seek(0, os.SEEK_SET)
-	s2, err := Load(f)
+	s2, err := LoadIndex(f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(s) != len(s2) {
+	if len(s) != s2.Len() {
 		t.Error("lengths different after Flush/Load")
 	}
 	for k,v := range s {
@@ -67,11 +67,11 @@ func TestSort(t *testing.T) {
 	f.Seek(0, os.SEEK_SET)
 
 	// Read keys and ensure sorted on disk
-	idx, err := LoadIndex(f)
+	ssr, err := LoadIndex(f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := len(idx)
+	n := ssr.Len()
 	f.Seek(0, os.SEEK_SET)
 	dec := gob.NewDecoder(f)
 	pk := ""

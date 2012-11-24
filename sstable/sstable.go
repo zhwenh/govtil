@@ -92,12 +92,19 @@ func Flush(s ssTable, w io.WriteSeeker) (map[string]int64, error) {
 // for testing
 func getKV(dec *gob.Decoder) (string, []byte, error) {
 	k := ""
+	l := 0
 	v := []byte{}
 	if err := dec.Decode(&k); err != nil {
 		return "", nil, err
 	}
+	if err := dec.Decode(&l); err != nil {
+		return "", nil, err
+	}
 	if err := dec.Decode(&v); err != nil {
 		return "", nil, err
+	}
+	if len(v) != l {
+		return "", nil, errors.New("lengths do not match")
 	}
 	return k, v, nil
 }
@@ -132,7 +139,7 @@ func (s *SSTableReader) Get(k string) ([]byte, error) {
 	return b, nil
 }
 
-func (s *SSTableReader) Len() int64 {
+func (s *SSTableReader) Len() int {
 	return len(s.idx)
 }
 
