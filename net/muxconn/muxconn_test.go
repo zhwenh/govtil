@@ -315,7 +315,7 @@ func TestRPCDropClientConn(t *testing.T) {
 	// Don't check for io.EOF, since some earlier versions of Go return
 	// "invalid argument" and other errors straight from the OS
 	if err == nil {
-		t.Errorf("RPC call on closed MuxConn client did not fail)
+		t.Errorf("RPC call on closed MuxConn client did not fail")
 	}
 }
 
