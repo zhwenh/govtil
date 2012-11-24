@@ -46,11 +46,12 @@ func TestSSTable(t *testing.T) {
 		t.Error("lengths different after Flush/Load")
 	}
 	for k,v := range s {
-		if s2[k] == nil {
+		v2, err := s2.Get(k)
+		if err != nil {
 			t.Errorf("did not find key %s after Flush/Load", k) 
 		}
-		if string(v) != string(s2[k]) {
-			t.Errorf("values don't match: %s and %s", v, s2[k])
+		if string(v) != string(v2) {
+			t.Errorf("values don't match: %s and %s", v, v2)
 		}
 	}
 }

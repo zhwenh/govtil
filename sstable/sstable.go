@@ -13,6 +13,10 @@ import (
 
 type ssTable map[string][]byte
 
+var NotFound error = errors.New("key not found")
+
+// Flush writes an ssTable and its index to an io.WriteSeeker. It returns the
+// index into the io.WriteSeeker and an error.
 func Flush(s ssTable, w io.WriteSeeker) (map[string]int64, error) {
 	enc := gob.NewEncoder(w)
 	keys := make([]string, len(s))
@@ -23,25 +27,34 @@ func Flush(s ssTable, w io.WriteSeeker) (map[string]int64, error) {
 		i++
 	}
 	sort.Strings(keys)
+
+	// write keys and values in sorted order
 	for _, k := range keys {
+		// key
 		if err := enc.Encode(k); err != nil {
 			return idx, err
 		}
-		loc, err := w.Seek(0, os.SEEK_CUR)
+
+		// length of value (for skipping values during scanning)
+		if err := enc.Encode(len(s[k])); err != nil {
+			return idx, err
+		}
+
+		// value
+		loc, err := w.Seek(0, os.SEEK_CUR) // for index
 		if err != nil {
 			return idx, err
 		}
-		idx[k] = loc
 		if err := enc.Encode(s[k]); err != nil {
 			return idx, err
 		}
+		idx[k] = loc
 	}
+
 	// write index as follows:
 	//  idx: n bytes (gob)
-	//  idx_start: k bytes (abs pos, gob)
-	//  k: 1 byte (raw)
-
-	// record idx_start, write idx, record idx_end
+	//  idx_start: k bytes (absolute position, gob)
+	//  k: 1 byte (offset from end of file, raw byte)
 	idx_start, err := w.Seek(0, os.SEEK_CUR)
 	if err != nil {
 		return idx, err
@@ -76,6 +89,7 @@ func Flush(s ssTable, w io.WriteSeeker) (map[string]int64, error) {
 	return idx, nil
 }
 
+// for testing
 func getKV(dec *gob.Decoder) (string, []byte, error) {
 	k := ""
 	v := []byte{}
@@ -88,10 +102,44 @@ func getKV(dec *gob.Decoder) (string, []byte, error) {
 	return k, v, nil
 }
 
-func LoadIndex(r io.ReadSeeker) (map[string]int64, error) {
-	cur_pos, err := r.Seek(0, os.SEEK_CUR) // stash position
+type SSTableReader struct {
+	f io.ReadSeeker
+	idx map[string]int64
+}
+
+func (s *SSTableReader) Get(k string) ([]byte, error) {
+	cur_pos, err := s.f.Seek(0, os.SEEK_CUR)
 	if err != nil {
 		return nil, err
+	}
+	loc, ok := s.idx[k]
+	if !ok {
+		return nil, NotFound
+	}
+	_, err = s.f.Seek(loc, os.SEEK_SET)
+	if err != nil {
+		return nil, err
+	}
+	b := []byte{}
+	dec := gob.NewDecoder(s.f)
+	if err = dec.Decode(&b); err != nil {
+		return b, err
+	}
+	_, err = s.f.Seek(cur_pos, os.SEEK_SET)
+	if err != nil {
+		return b, err
+	}
+	return b, nil
+}
+
+func (s *SSTableReader) Len() int64 {
+	return len(s.idx)
+}
+
+func LoadIndex(r io.ReadSeeker) (SSTableReader, error) {
+	cur_pos, err := r.Seek(0, os.SEEK_CUR) // stash position
+	if err != nil {
+		return SSTableReader{}, err
 	}
 
 	// read offset from file_end
@@ -99,7 +147,7 @@ func LoadIndex(r io.ReadSeeker) (map[string]int64, error) {
 	b := []byte{0}
 	_, err = r.Read(b)
 	if err != nil {
-		return nil, err
+		return SSTableReader{}, err
 	}
 	offset := int64(b[0]) + 1
 
@@ -108,7 +156,7 @@ func LoadIndex(r io.ReadSeeker) (map[string]int64, error) {
 	dec := gob.NewDecoder(r)
 	var idx_start int64
 	if err := dec.Decode(&idx_start); err != nil {
-		return nil, err
+		return SSTableReader{}, err
 	}
 	
 	// read idx
@@ -116,40 +164,16 @@ func LoadIndex(r io.ReadSeeker) (map[string]int64, error) {
 	dec = gob.NewDecoder(r) // flush buffer
 	var idx map[string]int64
 	if err := dec.Decode(&idx); err != nil {
-		return nil, err
+		return SSTableReader{}, err
 	}
 	
 	// restore position
 	_, err = r.Seek(cur_pos, os.SEEK_SET)
 	if err != nil {
-		return nil, err
+		return SSTableReader{}, err
 	}
-	
-	return idx, nil
-}
 
-// TODO(vsekhar): remove this, it will be infeasible, use cache and getters
-// instead.
-func Load(r io.ReadSeeker) (ssTable, error) {
-	idx, err := LoadIndex(r)
-	if err != nil {
-		return nil, err
-	}
-	n := len(idx)
-	r.Seek(0, os.SEEK_SET)
-	dec := gob.NewDecoder(r)
-	s := ssTable{}
-	for i := 0; i < n; i++ {
-		k, v, err := getKV(dec)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return s, err
-		}
-		s[k] = v
-	}
-	return s, nil
+	return SSTableReader{f: r, idx: idx}, nil
 }
 
 func getLoc(r io.ReadSeeker, loc int64) ([]byte, error) {
