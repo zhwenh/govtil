@@ -1,7 +1,7 @@
 checkout:
-	override:
-		- go get github.com/vsekhar/govtil
+  override:
+    - go get github.com/vsekhar/govtil
 
 test:
-	override:
-		- go test github.com/vsekhar/govtil/...
+  override:
+    - go test github.com/vsekhar/govtil/...
