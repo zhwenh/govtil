@@ -1,3 +1,7 @@
+machine:
+  environment:
+    GOPATH: /home/ubuntu/govtil
+
 checkout:
   override:
     - go get github.com/vsekhar/govtil
