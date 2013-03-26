@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 
 	yaml "launchpad.net/goyaml"
 )
@@ -30,6 +31,19 @@ func read(filename string, dest interface{}) (n *Node, err error) {
 	return &Node{dest}, nil
 }
 
+func badType(expected string, got interface{}) {
+	gotstr := ""
+	switch got.(type) {
+	case map[interface{}]interface{}:
+		gotstr = "map"
+	case *[]interface{}:
+		gotstr = "list"
+	default:
+		gotstr = fmt.Sprint(reflect.TypeOf(got))
+	}
+	panic(fmt.Sprintf("expected a %s, got %s", expected, gotstr))
+}
+
 // Read filename, assuming it is structured as a list at the top level.
 func ReadAsList(filename string) (*Node, error) {
 	l := make([]interface{}, 0)
@@ -50,7 +64,10 @@ func (n *Node) IsList() bool {
 
 // Convert node to a []*Node
 func (n *Node) AsList() []*Node {
-	l := n.Value.(*[]interface{})
+	l, ok := n.Value.(*[]interface{})
+	if !ok {
+		badType("list", n.Value)
+	}
 	ret := make([]*Node, 0, len(*l))
 	for _, li := range *l {
 		ret = append(ret, &Node{li})
@@ -60,7 +77,10 @@ func (n *Node) AsList() []*Node {
 
 // Get i-th child node, assuming current node is a list 
 func (n *Node) At(i int) *Node {
-	l := n.Value.(*[]interface{})
+	l, ok := n.Value.(*[]interface{})
+	if !ok {
+		badType("list", n.Value)
+	}
 	return &Node{(*l)[i]}
 }
 
@@ -72,7 +92,10 @@ func (n *Node) IsMap() bool {
 
 // Convert node to a map[string]*Node
 func (n *Node) AsMap() map[string]*Node {
-	m := n.Value.(map[interface{}]interface{})
+	m, ok := n.Value.(map[interface{}]interface{})
+	if !ok {
+		badType("map", n.Value)
+	}
 	ret := make(map[string]*Node)
 	for k, v := range m {
 		ret[k.(string)] = &Node{v}
@@ -82,7 +105,10 @@ func (n *Node) AsMap() map[string]*Node {
 
 // Get the node corresponding to key k, assuming current node is a map
 func (n *Node) Key(k string) *Node {
-	m := n.Value.(map[interface{}]interface{})
+	m, ok := n.Value.(map[interface{}]interface{})
+	if !ok {
+		badType("map", n.Value)
+	}
 	return &Node{m[k]}
 }
 
