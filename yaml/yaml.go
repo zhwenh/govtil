@@ -2,6 +2,9 @@
 // tree of nodes.
 package yaml
 
+// TODO(vsekhar): errors that aren't panics (have AsList and AsMap return err,
+// create At(7, "key", "another_key", 22) function).
+
 import (
 	"fmt"
 	"io/ioutil"
