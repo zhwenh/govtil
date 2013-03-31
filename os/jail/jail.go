@@ -16,3 +16,10 @@ type Interface interface {
 	Imprison(c *exec.Cmd) (*exec.Cmd, error)
 	CleanUp() error
 }
+
+// Create an exec.Cmd object based on a BASH-parsable command string.
+// Use this instead of os/exec.Command() as the standard version will mangle the
+// command path based on the configuration of the host machine.
+func Command(cmd string) *exec.Cmd {
+	return &exec.Cmd{Path: cmd}
+}
