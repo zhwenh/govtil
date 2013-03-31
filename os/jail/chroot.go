@@ -10,8 +10,8 @@ type chrootjail struct {
 	path string
 }
 
-// Imprison but DON'T chroot (needed during bootstrap())
-func (c chrootjail) imprison(cmd *exec.Cmd) *exec.Cmd {
+// Imprison but DON'T chroot (needed during NewChrootJail())
+func (c *chrootjail) imprison(cmd *exec.Cmd) *exec.Cmd {
 	new_cmd := new(exec.Cmd)
 	*new_cmd = *cmd
 	// 1) set FAKEROOTKEY to c.fakedKey
@@ -21,20 +21,13 @@ func (c chrootjail) imprison(cmd *exec.Cmd) *exec.Cmd {
 	return new_cmd
 }
 
-func (c chrootjail) Bootstrap() error {
-	// cmd := exec.Cmd("debootstrap", ...)
-	// cmd = c.imprison(cmd) # lowercase 'i', without chroot
-	// cmd.Run()...
-	return nil
-}
-
-func (c chrootjail) Imprison(cmd *exec.Cmd) *exec.Cmd {
+func (c *chrootjail) Imprison(cmd *exec.Cmd) (*exec.Cmd, error) {
 	new_cmd := c.imprison(cmd)
 	// add chroot <path> /bin/bash to the command
-	return new_cmd
+	return new_cmd, nil
 }
 
-func (c *chrootjail) Close() error {
+func (c *chrootjail) CleanUp() error {
 	c.fakedKillCh <- true // kill
 	<-c.fakedKillCh       // confirm
 	return nil
@@ -51,6 +44,8 @@ func (c *chrootjail) Close() error {
 // isolation. Consider using another jail based on lxc, seccomp, ptrace,
 // SELinux, kernel Capabilities, etc., or all of the above.
 func NewChrootJail(path string, envfile string) (Interface, error) {
+	// start faked, one for each jail
+	// TODO(vsekhar): consolidate into a singleton
 	killch, key, err := faked(envfile, envfile)
 	if err != nil {
 		return nil, err
