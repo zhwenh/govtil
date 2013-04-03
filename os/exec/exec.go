@@ -4,8 +4,11 @@ package exec
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"strings"
 )
 
 type fileable interface {
@@ -33,4 +36,19 @@ type Cmd interface {
 	StdinPipe() (io.WriteCloser, error)
 	StdoutPipe() (io.ReadCloser, error)
 	Wait() error
+}
+
+// Run is a convenience function to quickly run a command and check for errors.
+// If running the command produces an error, the error is returned along with
+// the combined output of the command.
+func Run(cmd string, args ...string) error {
+	path, err := exec.LookPath(cmd)
+	if err != nil {
+		return fmt.Errorf("command not found: %s", cmd)
+	}
+	co, err := exec.Command(path, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s failed: %s %v\n%s", cmd, cmd, strings.Join(args, " "), co)
+	}
+	return nil
 }

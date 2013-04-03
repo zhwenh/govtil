@@ -15,6 +15,7 @@ import (
 	"text/template"
 
 	guidlib "github.com/vsekhar/govtil/guid"
+	vexec "github.com/vsekhar/govtil/os/exec"
 )
 
 const raw_lxc_template = `
@@ -346,7 +347,7 @@ func getIfaceAddr(name string) (net.Addr, error) {
 // TODO: re-do for ip * commands rather than iptables, route, etc.
 // see: http://dougvitale.wordpress.com/2011/12/21/deprecated-linux-networking-commands-and-their-replacements/#route
 
-func iptables(args ...string) error { return cmd("iptables", args...) }
+func iptables(args ...string) error { return vexec.Run("iptables", args...) }
 func iptablesForward(rule string, chain string, port int, dest net.TCPAddr) error {
 	return iptables(
 		"-t", "nat", rule, chain,
@@ -357,17 +358,5 @@ func iptablesForward(rule string, chain string, port int, dest net.TCPAddr) erro
 	)
 }
 
-func brctl(args ...string) error    { return cmd("brctl", args...) }
-func ifconfig(args ...string) error { return cmd("ifconfig", args...) }
-
-// command wrapper
-func cmd(cmd string, args ...string) error {
-	path, err := exec.LookPath(cmd)
-	if err != nil {
-		return fmt.Errorf("command not found: %s", cmd)
-	}
-	if err := exec.Command(path, args...).Run(); err != nil {
-		return fmt.Errorf("%s failed: %s %v", cmd, cmd, strings.Join(args, " "))
-	}
-	return nil
-}
+func brctl(args ...string) error    { return vexec.Run("brctl", args...) }
+func ifconfig(args ...string) error { return vexec.Run("ifconfig", args...) }
