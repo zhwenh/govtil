@@ -10,21 +10,15 @@ type chrootjail struct {
 	path string
 }
 
-// Imprison but DON'T chroot (needed during NewChrootJail())
-func (c *chrootjail) imprison(cmd *exec.Cmd) *exec.Cmd {
+func (c *chrootjail) Run(cmd *exec.Cmd) error {
 	new_cmd := new(exec.Cmd)
 	*new_cmd = *cmd
 	// 1) set FAKEROOTKEY to c.fakedKey
 	// 2) add path to libfakeroot-sysv.so and libfakechroot.so to front of
 	//    LD_LIBRARY_PATH
 	// 3) add libfakeroot-sysv.so and libfakechroot.so to front of LD_PRELOAD
-	return new_cmd
-}
-
-func (c *chrootjail) Imprison(cmd *exec.Cmd) (*exec.Cmd, error) {
-	new_cmd := c.imprison(cmd)
-	// add chroot <path> /bin/bash to the command
-	return new_cmd, nil
+	// 4) add chroot <path> /bin/bash to the command
+	return new_cmd.Run()
 }
 
 func (c *chrootjail) CleanUp() error {

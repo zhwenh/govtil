@@ -4,11 +4,13 @@ package jail
 //    sudo apt-get install lxc bridge-utils
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,7 +20,10 @@ import (
 	vexec "github.com/vsekhar/govtil/os/exec"
 )
 
-const raw_lxc_template = `
+const VERSION_MAJOR = 0
+const VERSION_MINOR = 1
+
+const rawLxcTemplate = `
 # hostname
 lxc.utsname = {{.ID}}
 #lxc.aa_profile = unconfined
@@ -121,32 +126,70 @@ lxc.cgroup.cpu.shares = {{.CPU}}
 {{end}}
 `
 
-const cmdTemplate = `
-#ifconfig eth0 10.0.0.2 netmask 255.0.0.0 up
-#route add -host 10.0.0.1 dev eth0
-#route add default gw 10.0.0.1 eth0
-ip link set eth0 up
-ip addr add 10.0.0.2/24 dev eth0
-ip route add default via 10.0.0.1 dev eth0
-#hostname; ifconfig; ip route show
-echo > /etc/resolv.conf nameserver 8.8.8.8
-echo >> /etc/resolv.conf nameserver 8.8.4.4
-echo >> /etc/resolv.conf search govtil_jail
-# user command on next line
-%s
+const rawCmdTemplate = `
+GJ_SUSPEND_HISTORY () {
+	GJ_HISTCONTROL_OLD=
+	if [[ ${HISTCONTROL-} ]]; then
+		GJ_HC_SET=true
+		GJ_HISTCONTROL_OLD=$HISTCONTROL
+	else
+		GJ_HC_SET=false
+	fi
+	HISTCONTROL=ignorespace
+}
+
+GJ_RESTORE_HISTORY() {
+	if [[ $GJ_HC_SET ]]; then
+		HISTCONTROL=$GJ_HISTCONTROL_OLD
+	else
+		unset HISTCONTROL 2> /dev/null || true
+	fi
+	unset GJ_HISTCONTROL_OLD 2> /dev/null || true
+	unset GJ_HC_SET
+}
+
+GJ_SUSPEND_HISTORY
+ set -o nounset
+ set -o errexit
+
+ # networking
+ ip link set eth0 up
+ ip addr add 10.0.0.2/24 dev eth0
+ ip route add default via 10.0.0.1 dev eth0
+ echo > /etc/resolv.conf nameserver 8.8.8.8
+ echo >> /etc/resolv.conf nameserver 8.8.4.4
+ echo >> /etc/resolv.conf search govtil_jail
+
+ # Workaround: fix PWD
+ cd {{.Pwd}}
+GJ_RESTORE_HISTORY
+
+# user command
+{{.Cmd}}
+
+GJ_SUSPEND_HISTORY
+ # Write out env for next invocation
+ mkdir -p {{.LibDir}}
+ printenv > {{.LibDir}}/env
+GJ_RESTORE_HISTORY
 `
 
 const MEG = 1024 * 1024
 
 const ID_PREFIX = "govtil_jail_"
+const LIB_DIR = "/var/lib/govtil_jail"
 const extID = "wlan0" // 'real' external host network interface
 
 var lxcTemplate *template.Template
+var cmdTemplate *template.Template
 
 func init() {
-	// Compile lxc.conf template (use with template.Execute(out, config))
 	var err error
-	lxcTemplate, err = template.New("lxc").Parse(raw_lxc_template)
+	lxcTemplate, err = template.New("lxc").Parse(rawLxcTemplate)
+	if err != nil {
+		panic(err)
+	}
+	cmdTemplate, err = template.New("cmd").Parse(rawCmdTemplate)
 	if err != nil {
 		panic(err)
 	}
@@ -160,13 +203,14 @@ type lxcjail struct {
 	Swap     int
 	CPU      int
 	Ports    []uint
+	Env      []string
 }
 
-func (l *lxcjail) Imprison(c *exec.Cmd) (*exec.Cmd, error) {
+func (l *lxcjail) Run(c *exec.Cmd) error {
 	if len(c.Args) > 0 {
-		return nil, fmt.Errorf("Error, cannot have Args in cmd. Must be combined into a single Bash-parsable string in cmd.Path")
+		return fmt.Errorf("Error, cannot have Args in cmd. Must be combined into a single Bash-parsable string in cmd.Path")
 	}
-	user_cmd := c.Path
+	
 	cmd := new(exec.Cmd)
 	*cmd = *c
 	// lxc-execute doesn't work because it wants to mount /proc and requires
@@ -178,12 +222,81 @@ func (l *lxcjail) Imprison(c *exec.Cmd) (*exec.Cmd, error) {
 		fmt.Sprintf("--rcfile=%s", filepath.Join(os.TempDir(), l.ID)),
 		"--", "bash", "-c",
 	})
-	script := fmt.Sprintf(cmdTemplate, user_cmd)
-	cmd.Args = append(cmd.Args, script)
+	if c.Env == nil {
+		cmd.Env = l.Env
+	} else {
+		cmd.Env = c.Env
+	}
 
-	return cmd, nil
+	// Workaround: Lxc resets the working directory to root each time, so we
+	// hunt down PWD here and set it manually in the above cmdScript
+	pwd := "."
+	if cmd.Env != nil {
+		for _, s := range cmd.Env {
+			parts := strings.SplitN(s, "=", 2)
+			if len(parts) < 2 {
+				continue
+			}
+			if parts[0] == "PWD" {
+				trimmed := strings.TrimSpace(parts[1])
+				if len(trimmed) > 0 {
+					pwd = trimmed
+				}
+				break
+			}
+		}
+	}
+
+	// Prepare bash script and run
+	scriptBuf := new(bytes.Buffer)
+	type settings struct {
+		Cmd string
+		LibDir string
+		Pwd string
+	}
+	s := settings{
+		Cmd: c.Path,
+		LibDir: LIB_DIR,
+		Pwd: pwd,
+	}
+	if err := cmdTemplate.Execute(scriptBuf, s); err != nil {
+		return err
+	}
+	cmd.Args = append(cmd.Args, scriptBuf.String())
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	
+	// Forward Ctrl-C to underlying process, to allow Go to cleanup
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt)
+	go func() {
+		for s := range sigCh {
+			cmd.Process.Signal(s)
+		}
+	}()
+
+	cmdErr := cmd.Wait()
+
+	// Read and parse resulting env
+	envBuf := new(bytes.Buffer)
+	envFilePath := filepath.Join(l.RootFS, s.LibDir, "env")
+	envFile, err := os.Open(envFilePath)
+	if err != nil {
+		return err
+	}
+	defer envFile.Close()
+	envBuf.ReadFrom(envFile)
+	l.Env = strings.Split(envBuf.String(), "\n")
+	
+	// We leave the env file as is on the filesystem. The "state" of the image
+	// thus includes the final environment. This further enhances our identity
+	// checking.
+
+	return cmdErr
 }
 
+// Accumulate errors
 func accErrs(acc *[]string, err error) {
 	if err != nil {
 		*acc = append(*acc, err.Error())
@@ -241,7 +354,9 @@ func (l *lxcjail) CleanUp() error {
 //  2. Create a new network bridge
 //  3. Setup iptables and NAT routing for requested ports
 //  4. Generate and write lxc configuration file
-func NewLxcJail(root string, ports []uint) (Interface, error) {
+//
+// This jail's multi-threaded behavior is not yet known.
+func NewLxcJail(root string, ports []uint, env []string) (Interface, error) {
 	l := new(lxcjail)
 
 	// 1. Unique ID
@@ -311,6 +426,22 @@ func NewLxcJail(root string, ports []uint) (Interface, error) {
 	}
 	defer cfile.Close()
 	err = lxcTemplate.Execute(cfile, l)
+
+	if env != nil {
+		l.Env = env
+	} else {
+		l.Env = []string{
+			"SHELL=/bin/bash",
+			"USER=root",
+			"LOGNAME=root",
+			"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			"PWD=/root",
+			"HOME=/root",
+			"GOVTIL_JAIL_LXC=true",
+			fmt.Sprintf("GOVTIL_JAIL_LXC_MAJOR_VERSION=%d", VERSION_MAJOR),
+			fmt.Sprintf("GOVTIL_JAIL_LXC_MINOR_VERSION=%d", VERSION_MINOR),
+		}
+	}
 
 	return l, nil
 }

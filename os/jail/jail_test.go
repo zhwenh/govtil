@@ -2,7 +2,8 @@ package jail
 
 import (
 	"os"
-	"os/signal"
+	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -19,42 +20,42 @@ func TestFaked(t *testing.T) {
 // TODO(vsekhar): test NewChrootJail()
 // TODO(vsekhar): test NewLxcJail()
 
+func connectedCommand(j Interface, c string) *exec.Cmd {
+	cmd := Command(c)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	return cmd
+}
+
+const lxcScript = `
+echo hello world
+pwd
+cd /
+ls
+`
+
 func TestLxcJail(t *testing.T) {
-	lxc, err := NewLxcJail("/home/vsekhar/chroot", nil)
+	l, err := NewLxcJail("/home/vsekhar/chroot", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		if err := lxc.CleanUp(); err != nil {
+		if err := l.CleanUp(); err != nil {
 			t.Error(err)
 		}
 	}()
 
-	// cmd := exec.Command("ifconfig")
-	// cmd := exec.Command("bash", "-c", "echo hello; echo goodbye")
-	// cmd := exec.Command("bash", "-c", "env")
-	// cmd := exec.Command("ping", "-c", "1", "74.125.224.105")
-	cmd := Command("ping google.com")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	if cmd, err = lxc.Imprison(cmd); err != nil {
-		t.Fatal(err)
-	}
-	if err = cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-
-	// Forward Ctrl-C to underlying process, to allow Go to cleanup
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		for s := range c {
-			cmd.Process.Signal(s)
+	cmds := strings.Split(lxcScript, "\n")
+	for _, cmd := range cmds {
+		c := Command(cmd)
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		c.Stdin = os.Stdin
+		
+		t.Logf("Running %s", c.Path)
+		if err := l.Run(c); err != nil {
+			t.Fatal(err)
 		}
-	}()
-	if err := cmd.Wait(); err != nil {
-		t.Error(err)
 	}
-
 }
