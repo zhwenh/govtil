@@ -1,10 +1,15 @@
+0) Bootstrap filesystem
 1) Master process runs as root (until userspace namespaces are implemented)
-2) Master process starts child process in new pid/net/mount namespaces
+2) Master process starts child process in new pid/net/mount namespaces (clone?)
 3) Master syscall.Wait4(pid, STOPPED)
-4) Child process chuids, chgids, mounts, signals master process, and SIGSTOPs itself
+4) Child process chuids, chgids, mounts, drops capabilities, signals master process, and SIGSTOPs itself
 5) Master returns from Wait4, moves child to appropriate cgroup
 6) Master SIGCONTs child
 7) Child process starts user process
 
 Thoughs:
 -can you use bash as the child process? eliminates compiling another new binary
+-can the child signal its parent if it is in a new PID namespace?
+ -master process might have to spin-wait to see STOPPED status for child and
+  then proceed
+-use syscall.Rawsyscall6(syscall.SYS_CLONE, CLONE_NEWUSER | CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWNET | CLONE_NEWIPC | SIGCHLD, (void*) 0, 0, 0, 0)?
