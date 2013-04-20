@@ -1,0 +1,10 @@
+1) Master process runs as root (until userspace namespaces are implemented)
+2) Master process starts child process in new pid/net/mount namespaces
+3) Master syscall.Wait4(pid, STOPPED)
+4) Child process chuids, chgids, mounts, signals master process, and SIGSTOPs itself
+5) Master returns from Wait4, moves child to appropriate cgroup
+6) Master SIGCONTs child
+7) Child process starts user process
+
+Thoughs:
+-can you use bash as the child process? eliminates compiling another new binary

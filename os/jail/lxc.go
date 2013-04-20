@@ -39,6 +39,7 @@ lxc.network.hwaddr = 00:11:22:33:44:d
 #lxc.network.ipv4 = 192.168.1.2/24
 #lxc.network.ipv4 = 10.0.0.2/24
 lxc.network.ipv4 = 0.0.0.0
+# FIXME: add default gateway (and DHCP?) in lxc 0.8.0
 
 # root filesystem
 lxc.rootfs = {{.RootFS}}
@@ -148,11 +149,11 @@ GJ_RESTORE_HISTORY() {
 	unset GJ_HC_SET
 }
 
-GJ_SUSPEND_HISTORY
+#GJ_SUSPEND_HISTORY
  set -o nounset
  set -o errexit
 
- # networking
+ # networking (FIXME: do this in lxc.conf with lxc 0.8.0 in precise)
  ip link set eth0 up
  ip addr add 10.0.0.2/24 dev eth0
  ip route add default via 10.0.0.1 dev eth0
@@ -162,16 +163,16 @@ GJ_SUSPEND_HISTORY
 
  # Workaround: fix PWD
  cd {{.Pwd}}
-GJ_RESTORE_HISTORY
+#GJ_RESTORE_HISTORY
 
 # user command
 {{.Cmd}}
 
-GJ_SUSPEND_HISTORY
+#GJ_SUSPEND_HISTORY
  # Write out env for next invocation
  mkdir -p {{.LibDir}}
  printenv > {{.LibDir}}/env
-GJ_RESTORE_HISTORY
+#GJ_RESTORE_HISTORY
 `
 
 const MEG = 1024 * 1024
@@ -220,7 +221,9 @@ func (l *lxcjail) Run(c *exec.Cmd) error {
 		cmd.Path,
 		fmt.Sprintf("--name=%s", l.ID),
 		fmt.Sprintf("--rcfile=%s", filepath.Join(os.TempDir(), l.ID)),
-		"--", "bash", "-c",
+		"--",
+		"bash",
+		"-c",
 	})
 	if c.Env == nil {
 		cmd.Env = l.Env
@@ -374,6 +377,8 @@ func NewLxcJail(root string, ports []uint, env []string) (Interface, error) {
 	if err := brctl("addbr", l.BridgeID); err != nil {
 		return nil, err
 	}
+	// TODO: smarter way to generate IP addresses for host and containers
+	// (needed for multiple concurrent containers)
 	if err := ifconfig(l.BridgeID, "10.0.0.1", "netmask", "255.0.0.0", "up"); err != nil {
 		return nil, err
 	}
@@ -478,6 +483,7 @@ func getIfaceAddr(name string) (net.Addr, error) {
 // TODO: re-do for ip * commands rather than iptables, route, etc.
 // see: http://dougvitale.wordpress.com/2011/12/21/deprecated-linux-networking-commands-and-their-replacements/#route
 
+func ip(args ...string) error { return vexec.Run("ip", args...) }
 func iptables(args ...string) error { return vexec.Run("iptables", args...) }
 func iptablesForward(rule string, chain string, port int, dest net.TCPAddr) error {
 	return iptables(

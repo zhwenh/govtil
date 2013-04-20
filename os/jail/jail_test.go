@@ -29,10 +29,8 @@ func connectedCommand(j Interface, c string) *exec.Cmd {
 }
 
 const lxcScript = `
-echo hello world
-pwd
-cd /
-ls
+ifconfig
+ping -c 1 google.com
 `
 
 func TestLxcJail(t *testing.T) {
@@ -52,7 +50,7 @@ func TestLxcJail(t *testing.T) {
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
 		c.Stdin = os.Stdin
-		
+
 		t.Logf("Running %s", c.Path)
 		if err := l.Run(c); err != nil {
 			t.Fatal(err)

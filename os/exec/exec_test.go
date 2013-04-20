@@ -1,7 +1,7 @@
 package exec
 
 import (
-	"os/exec"
+	osexec "os/exec"
 	"testing"
 
 	"github.com/vsekhar/govtil/bytes"
@@ -23,17 +23,27 @@ func TestFileFromConn(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	defer fout.Close()
-	
+
 	senddata := []byte("hello\n")
 
 	go func() {
 		in.Write(senddata)
 	}()
-	
-	cmd := exec.Command("head", "-n1")
+
+	cmd := osexec.Command("head", "-n1")
 	cmd.Stdin = fout
 	recvdata, err := cmd.Output()
 	if !bytes.Equals(senddata, recvdata) {
 		t.Error("failed, received data doesn't match sent data")
+	}
+}
+
+func TestStartProcess(t *testing.T) {
+	c := Command("/bin/bash", "-c", "echo $$")
+
+	if out, err := c.Output(); err != nil {
+		t.Fatal(err)
+	} else {
+		t.Log(string(out))
 	}
 }

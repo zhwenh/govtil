@@ -1,11 +1,23 @@
 // Package exec provides helpers for running subprocesses with inherited
-// network socket file descriptors
+// network socket file descriptors (linux only)
+
+// +build linux
+
+// Running in an isolated namespace
+//   1) Create and configure temporary cgroup
+//   2) Fork (parent listens for error code, returns)
+//   3) Attach to cgroup
+//   4) cd, chroot, etc.
+//   5) unshare(CLONE_ALLNS)
+//   6) if error, emit code on pipe and exit
+//   7) emit ok
+//   8) exec
+
 package exec
 
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,19 +35,6 @@ func FileFromConn(c interface{}) (*os.File, error) {
 		return nil, errors.New("Cannot get os.File from connection; ensure it is a TCP/UDP/Unix socket")
 	}
 	return f.File()
-}
-
-// Interface matching that of the os/exec.Cmd struct, for returning Cmd-like
-// objects.
-type Cmd interface {
-	CombinedOutput() ([]byte, error)
-	Output() ([]byte, error)
-	Run() error
-	Start() error
-	StderrPipe() (io.ReadCloser, error)
-	StdinPipe() (io.WriteCloser, error)
-	StdoutPipe() (io.ReadCloser, error)
-	Wait() error
 }
 
 // Run is a convenience function to quickly run a command and check for errors.
