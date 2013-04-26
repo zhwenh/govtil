@@ -2,6 +2,25 @@
 
 package exec
 
+/*
+#cgo 
+#include <signal.h>
+#include <linux/sched.h>
+#include <sys/syscall.h>
+
+unsigned long cloneFlags = CLONE_NEWIPC
+                         | CLONE_NEWUTS
+                         | CLONE_NEWNS
+                         | CLONE_NEWNET
+                         | CLONE_NEWPID
+                         | SIGCHLD;
+
+int myClone() {
+	return sys_clone(cloneFlags);
+}
+*/
+import "C"
+
 import (
 	"bytes"
 	"errors"
@@ -158,16 +177,6 @@ func forkAndExecInChild(argv0 *byte, argv, envv []*byte, chroot, dir *byte, attr
 	)
 
 	// VS: >>>>> BEGIN ISOLATION STUFF
-	const (
-		CLONE_NEWNS   = 0x00020000
-		CLONE_NEWUTS  = 0x04000000
-		CLONE_NEWIPC  = 0x08000000
-		CLONE_NEWUSER = 0x10000000 // not yet in the kernel
-		CLONE_NEWPID  = 0x20000000
-		CLONE_NEWNET  = 0x40000000
-	)
-	unshareFlag := uintptr(CLONE_NEWPID)
-	//unshareFlag := CLONE_NEWNS + CLONE_NEWUTS + CLONE_NEWIPC + /* CLONE_NEWUSER + */ CLONE_NEWPID + CLONE_NEWNET
 	// VS: <<<<< END ISOLATION STUFF
 
 	// guard against side effects of shuffling fds below.
@@ -178,7 +187,22 @@ func forkAndExecInChild(argv0 *byte, argv, envv []*byte, chroot, dir *byte, attr
 
 	// About to call fork.
 	// No more allocation or calls of non-assembly functions.
-	r1, _, err1 = syscall.RawSyscall(syscall.SYS_FORK, 0, 0, 0)
+	// VS: >>>>> BEGIN ISOLATION STUFF
+	const (
+		CLONE_NEWNS   = 0x00020000
+		CLONE_NEWUTS  = 0x04000000
+		CLONE_NEWIPC  = 0x08000000
+		CLONE_NEWUSER = 0x10000000
+		CLONE_NEWPID  = 0x20000000
+		CLONE_NEWNET  = 0x40000000
+		SIGCHLD       = 0x11
+	)
+	var cloneFlag uintptr
+	cloneFlag = CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNET | SIGCHLD
+	//r1, _, err1 = syscall.RawSyscall(syscall.SYS_CLONE, cloneFlag, 0, 0)
+	r1, err1 = C.myClone()
+	// VS: <<<<< END ISOLATION STUFF
+	// r1, _, err1 = syscall.RawSyscall(syscall.SYS_FORK, 0, 0, 0)
 	if err1 != 0 {
 		return 0, err1
 	}
@@ -270,14 +294,6 @@ func forkAndExecInChild(argv0 *byte, argv, envv []*byte, chroot, dir *byte, attr
 			goto childerror
 		}
 	}
-
-	// VS: >>>>> BEGIN ISOLATION STUFF
-	// Unshare
-	_, _, err1 = syscall.RawSyscall(syscall.SYS_UNSHARE, uintptr(unshareFlag), 0, 0)
-	if err != 0 {
-		goto childerror
-	}
-	// VS: <<<<< END ISOLATION STUFF
 
 	// Pass 1: look for fd[i] < i and move those up above len(fd)
 	// so that pass 2 won't stomp on an fd it needs later.
