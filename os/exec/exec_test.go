@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"os"
 	osexec "os/exec"
 	"testing"
 
@@ -39,11 +40,19 @@ func TestFileFromConn(t *testing.T) {
 }
 
 func TestStartProcess(t *testing.T) {
-	c := Command("/bin/bash", "-c", "echo $$")
+	c := Command("mount")
+	// c := Command("/bin/bash", "-c", "ps; echo $$")
+	c.Stdout = os.Stdout
+	c.Stdin = os.Stdin
+	c.Stderr = os.Stderr
+	// c := Command("/bin/ping", "-c", "1", "google.com")
 
-	if out, err := c.Output(); err != nil {
+	//out, err := c.Output()
+	//t.Log(string(out))
+	if err := c.Start(); err != nil {
 		t.Fatal(err)
-	} else {
-		t.Log(string(out))
+	}
+	if err := c.Wait(); err != nil {
+		t.Fatal(err)
 	}
 }
