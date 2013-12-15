@@ -3,9 +3,9 @@
 package exec
 
 /*
-#cgo 
 #include <signal.h>
 #include <linux/sched.h>
+#include <unistd.h>
 #include <sys/syscall.h>
 
 unsigned long cloneFlags = CLONE_NEWIPC
@@ -16,7 +16,7 @@ unsigned long cloneFlags = CLONE_NEWIPC
                          | SIGCHLD;
 
 int myClone() {
-	return sys_clone(cloneFlags);
+	return syscall(SYS_clone, cloneFlags);
 }
 */
 import "C"
@@ -199,8 +199,8 @@ func forkAndExecInChild(argv0 *byte, argv, envv []*byte, chroot, dir *byte, attr
 	)
 	var cloneFlag uintptr
 	cloneFlag = CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNET | SIGCHLD
-	//r1, _, err1 = syscall.RawSyscall(syscall.SYS_CLONE, cloneFlag, 0, 0)
-	r1, err1 = C.myClone()
+	r1, _, err1 = syscall.RawSyscall(syscall.SYS_CLONE, cloneFlag, 0, 0)
+	// r1, err1 = C.myClone()
 	// VS: <<<<< END ISOLATION STUFF
 	// r1, _, err1 = syscall.RawSyscall(syscall.SYS_FORK, 0, 0, 0)
 	if err1 != 0 {
