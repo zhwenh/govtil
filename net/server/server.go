@@ -16,7 +16,6 @@ import (
 	"github.com/vsekhar/govtil/net/server/borkborkbork"
 	"github.com/vsekhar/govtil/net/server/healthz"
 	"github.com/vsekhar/govtil/net/server/logginghandler"
-	//"github.com/vsekhar/govtil/net/server/streamz"
 	"github.com/vsekhar/govtil/net/server/varz"
 )
 
@@ -50,14 +49,6 @@ func init() {
 	http.Handle("/healthz", Healthz)
 	http.Handle("/varz", Varz)
 	http.Handle("/birpc", birpc.Handler(RPC, RPCClientsCh))
-
-/*	// streamz
-	subs := make(chan net.Conn)
-	streamzhandler := websocket.ChannelHandler(subs)
-	http.Handle("/streamz", streamzhandler)
-	go streamz.DispatchForever(subs, StreamzCh)
-	go streamz.Ticker(StreamzCh)
-	*/
 
 	killHandler := borkborkbork.New(syscall.SIGKILL)
 	intHandler := borkborkbork.New(syscall.SIGINT)
