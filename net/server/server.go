@@ -4,6 +4,7 @@ package server
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"net/rpc"
@@ -75,21 +76,35 @@ func init() {
 //    /birpc
 //    /debug/pprof
 //
+// Setting port to 0 will start the server on an ephemeral port. The assigned
+// port will be logged.
 func ServeForever(port int) error {
 	l, err := vnet.SignalListener(port)
 	if err != nil {
 		return err
 	}
+	return serveListener(l)
+}
+
+// for testing
+func serveListener(l net.Listener) error {
 	// Wrap with logger
 	handler := logginghandler.New(http.DefaultServeMux, log.GetVerbosity())
 
+	// Get port (might be ephemeral)
+	_, aps, err := net.SplitHostPort(l.Addr().String())
+	if err != nil {
+		log.Errorf("govtil/net/server: failed to get port - %v", err)
+	}
+
 	// Serve
+	log.Printf("govtil/net/server: starting on port %v", aps)
 	err = http.Serve(l, handler)
 	if err != nil {
 		if vnet.SocketClosed(err) {
 			err = nil // closed due to signal, no error
 		} else {
-			log.Errorln("govtil/net/server:", err)
+			log.Errorf("govtil/net/server: %v", err)
 		}
 	}
 	log.Println("govtil/net/server: Terminating")
