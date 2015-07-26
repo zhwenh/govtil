@@ -4,7 +4,6 @@ package server
 
 import (
 	"fmt"
-//	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"net/rpc"
@@ -13,7 +12,7 @@ import (
 	"github.com/vsekhar/govtil/log"
 	"github.com/vsekhar/govtil/mem"
 	vnet "github.com/vsekhar/govtil/net"
-	//"github.com/vsekhar/govtil/net/server/birpc"
+	"github.com/vsekhar/govtil/net/server/birpc"
 	"github.com/vsekhar/govtil/net/server/borkborkbork"
 	"github.com/vsekhar/govtil/net/server/healthz"
 	"github.com/vsekhar/govtil/net/server/logginghandler"
@@ -50,13 +49,7 @@ func init() {
 	http.Handle("/", http.HandlerFunc(defaultHandler))
 	http.Handle("/healthz", Healthz)
 	http.Handle("/varz", Varz)
-
-/*	// birpc
-	birpcconns := make(chan net.Conn)
-	rpchandler := websocket.ChannelHandler(birpcconns)
-	http.Handle("/birpc", rpchandler)
-	go birpc.DispatchForever(birpcconns, RPC, RPCClientsCh)
-	*/
+	http.Handle("/birpc", birpc.HTTPHandleFunc(RPC, RPCClientsCh))
 
 /*	// streamz
 	subs := make(chan net.Conn)
