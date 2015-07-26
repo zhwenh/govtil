@@ -26,11 +26,11 @@ func startServer(_ *testing.T) {
 func TestServer(t *testing.T) {
 	l, err := vnet.SignalListener(0)
 	if err != nil {
-		t.Fatalf("failed to listen")
+		t.Fatal(err)
 	}
 	_, aps, err := net.SplitHostPort(l.Addr().String())
 	if err != nil {
-		t.Fatalf("failed to get port: %v", err)
+		t.Fatal(err)
 	}
 	port, err := strconv.Atoi(aps)
 	if err != nil {
@@ -39,7 +39,7 @@ func TestServer(t *testing.T) {
 
 	go func() {
 		if serveListener(l) != nil {
-			t.Errorf("serveListener error: %v", err)
+			t.Fatal(err)
 		}
 	}()
 	resp, err := http.Get("http://localhost:" + fmt.Sprintf("%d", port) + "/healthz")

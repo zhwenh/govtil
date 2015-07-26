@@ -91,14 +91,13 @@ func serveListener(l net.Listener) error {
 	// Wrap with logger
 	handler := logginghandler.New(http.DefaultServeMux, log.GetVerbosity())
 
-	// Get port (might be ephemeral)
 	_, aps, err := net.SplitHostPort(l.Addr().String())
 	if err != nil {
 		log.Errorf("govtil/net/server: failed to get port - %v", err)
 	}
+	log.Printf("govtil/net/server: starting on port %v", aps)
 
 	// Serve
-	log.Printf("govtil/net/server: starting on port %v", aps)
 	err = http.Serve(l, handler)
 	if err != nil {
 		if vnet.SocketClosed(err) {
