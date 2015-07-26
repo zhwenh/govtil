@@ -3,11 +3,12 @@ package testing
 
 import (
 	"errors"
-	"net"
 	"log"
+	"net"
+	"runtime"
 )
 
-// Set up a connection to myself
+// Set up a connection to myself via ephemeral ports
 func SelfConnection() (net.Conn, net.Conn) {
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -38,4 +39,12 @@ func (r *RPCRecv) Echo(in *string, out *string) error {
 
 func (r *RPCRecv) Error(*string, *string) error {
 	return errors.New("testing.RPCRecv intentional error")
+}
+
+var stackBuf = make([]byte, 4096)
+
+// Get stack trace (don't use in panic situations as this function allocs)
+func Stack() string {
+	n := runtime.Stack(stackBuf, false)
+	return string(stackBuf[:n])
 }

@@ -7,6 +7,8 @@ import (
 	"flag"
 	stdlog "log"
 	"sync"
+
+	"github.com/vsekhar/govtil/testing"
 )
 
 var verbosity = flag.Int("verbosity", 0, "logging verbosity (-1==QUIET to 1==DEBUG)")
@@ -66,6 +68,30 @@ func Debugf(s string, args ...interface{}) {
 func Debugln(args ...interface{}) {
 	if test(DEBUG) {
 		stdlog.Println(args...)
+	}
+}
+
+var stackBuf = make([]byte, 4096)
+
+// Debug with stack dump
+func Stack(args ...interface{}) {
+	if test(DEBUG) {
+		stdlog.Print(args...)
+		stdlog.Print(testing.Stack())
+	}
+}
+
+func Stackf(s string, args ...interface{}) {
+	if test(DEBUG) {
+		stdlog.Printf(s, args...)
+		stdlog.Print(testing.Stack())
+	}
+}
+
+func Stackln(args ...interface{}) {
+	if test(DEBUG) {
+		stdlog.Println(args...)
+		stdlog.Print(testing.Stack())
 	}
 }
 
