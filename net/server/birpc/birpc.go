@@ -4,25 +4,12 @@
 package birpc
 
 import (
-	"net"
 	"net/rpc"
 
 	"golang.org/x/net/websocket"
 
 	"github.com/vsekhar/govtil/net/multiplex"
 )
-
-func DispatchForever(connch <-chan net.Conn, srv *rpc.Server, clientch chan<- *rpc.Client) {
-	for {
-		conn, more := <- connch
-		if !more {
-			return
-		}
-		muxed := multiplex.Split(conn, 2)
-		go srv.ServeConn(muxed[0])
-		clientch <- rpc.NewClient(muxed[1])
-	}
-}
 
 func HTTPHandleFunc(srv *rpc.Server, cch chan<- *rpc.Client) websocket.Handler {
 	return websocket.Handler(func(c *websocket.Conn) {
