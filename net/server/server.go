@@ -49,7 +49,7 @@ func init() {
 	http.Handle("/", http.HandlerFunc(defaultHandler))
 	http.Handle("/healthz", Healthz)
 	http.Handle("/varz", Varz)
-	http.Handle("/birpc", birpc.HTTPHandleFunc(RPC, RPCClientsCh))
+	http.Handle("/birpc", birpc.Handler(RPC, RPCClientsCh))
 
 /*	// streamz
 	subs := make(chan net.Conn)

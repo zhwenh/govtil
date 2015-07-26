@@ -11,7 +11,7 @@ import (
 	"github.com/vsekhar/govtil/net/multiplex"
 )
 
-func HTTPHandleFunc(srv *rpc.Server, cch chan<- *rpc.Client) websocket.Handler {
+func Handler(srv *rpc.Server, cch chan<- *rpc.Client) websocket.Handler {
 	return websocket.Handler(func(c *websocket.Conn) {
 		muxed := multiplex.Split(c, 2)
 		go func() {

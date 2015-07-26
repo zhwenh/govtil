@@ -53,7 +53,7 @@ func TestBiRPC(t *testing.T) {
 	srv.Register(arith)
 	clientch := make(chan *rpc.Client)
 
-	http.Handle("/birpc", HTTPHandleFunc(srv, clientch))
+	http.Handle("/birpc", Handler(srv, clientch))
 
 	// Start server
 	const port = 11235
