@@ -10,8 +10,6 @@ import (
 	"net"
 	"strings"
 	"time"
-	
-	vbytes "github.com/vsekhar/govtil/bytes"
 )
 
 const GUIDLength = 16
@@ -49,8 +47,8 @@ func (sg *GUID) Short() string {
 	return fmt.Sprintf("%x", sg[12:])
 }
 
-func (sg *GUID) Equals(sg2 *GUID) bool {
-	return vbytes.Equals(sg[:], sg2[:])
+func (sg *GUID) Equal(sg2 *GUID) bool {
+	return bytes.Equal(sg[:], sg2[:])
 }
 
 func (sg *GUID) bytes() [GUIDLength]byte {

@@ -12,18 +12,6 @@ func RandBytes(n int) []byte {
 	return ret
 }
 
-func Equals(b1, b2 []byte) bool {
-	if len(b1) != len(b2) {
-		return false
-	}
-	for i, cb := range b1 {
-		if cb != b2[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func Reverse(a []byte) {
 	// reverse a slice in place
 	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
