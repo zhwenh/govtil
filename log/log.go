@@ -17,20 +17,24 @@ const (
 	DEBUG  = 1
 )
 
-type Level int
-
 var mutex sync.RWMutex
 
-func test(level Level) bool {
+func test(level int) bool {
 	mutex.RLock()
 	defer mutex.RUnlock()
-	return Level(*verbosity) >= level
+	return *verbosity >= level
 }
 
-func SetVerbosity(level Level) {
+func SetVerbosity(level int) {
 	mutex.Lock()
 	defer mutex.Unlock()
-	*verbosity = int(level)
+	*verbosity = level
+}
+
+func GetVerbosity() int {
+	mutex.Lock()
+	defer mutex.Unlock()
+	return *verbosity
 }
 
 // Not silenceable, terminates
@@ -83,17 +87,17 @@ func Println(args ...interface{}) {
 }
 
 // Specified level
-func Log(level Level, args ...interface{}) {
+func Log(level int, args ...interface{}) {
 	if test(level) {
 		stdlog.Print(args...)
 	}
 }
-func Logf(level Level, s string, args ...interface{}) {
+func Logf(level int, s string, args ...interface{}) {
 	if test(level) {
 		stdlog.Printf(s, args...)
 	}
 }
-func Logln(level Level, args ...interface{}) {
+func Logln(level int, args ...interface{}) {
 	if test(level) {
 		stdlog.Println(args...)
 	}
