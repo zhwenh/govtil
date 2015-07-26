@@ -4,23 +4,20 @@ package server
 
 import (
 	"fmt"
-	"net"
+//	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"net/rpc"
-	"os"
-	"os/signal"
 	"syscall"
 
 	"github.com/vsekhar/govtil/log"
 	"github.com/vsekhar/govtil/mem"
 	vnet "github.com/vsekhar/govtil/net"
-	"github.com/vsekhar/govtil/net/server/birpc"
+	//"github.com/vsekhar/govtil/net/server/birpc"
 	"github.com/vsekhar/govtil/net/server/borkborkbork"
-	"github.com/vsekhar/govtil/net/server/direct"
 	"github.com/vsekhar/govtil/net/server/healthz"
 	"github.com/vsekhar/govtil/net/server/logginghandler"
-	"github.com/vsekhar/govtil/net/server/streamz"
+	//"github.com/vsekhar/govtil/net/server/streamz"
 	"github.com/vsekhar/govtil/net/server/varz"
 )
 
@@ -54,16 +51,20 @@ func init() {
 	http.Handle("/healthz", Healthz)
 	http.Handle("/varz", Varz)
 
-	// birpc
+/*	// birpc
 	birpcconns := make(chan net.Conn)
-	http.Handle("/birpc", &direct.Handler{birpcconns})
+	rpchandler := websocket.ChannelHandler(birpcconns)
+	http.Handle("/birpc", rpchandler)
 	go birpc.DispatchForever(birpcconns, RPC, RPCClientsCh)
+	*/
 
-	// streamz
+/*	// streamz
 	subs := make(chan net.Conn)
-	http.Handle("/streamz", &direct.Handler{subs})
+	streamzhandler := websocket.ChannelHandler(subs)
+	http.Handle("/streamz", streamzhandler)
 	go streamz.DispatchForever(subs, StreamzCh)
 	go streamz.Ticker(StreamzCh)
+	*/
 
 	killHandler := borkborkbork.New(syscall.SIGKILL)
 	intHandler := borkborkbork.New(syscall.SIGINT)
@@ -91,33 +92,15 @@ func init() {
 //    /debug/pprof
 //
 func ServeForever(port int) error {
-	addr := ":" + fmt.Sprint(port)
-	l, err := net.Listen("tcp", addr)
+	l, err := vnet.SignalListener(port)
 	if err != nil {
-		log.Errorln("govtil/net/server: Failed to listen on", port, err)
 		return err
 	}
+	// Wrap with logger
+	handler := logginghandler.New(http.DefaultServeMux, log.GetVerbosity())
 
-	// Close listen port on signals (causes http.Serve() to return)
-	sigch := make(chan os.Signal)
-	signal.Notify(sigch, []os.Signal{
-		syscall.SIGABRT,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGKILL,
-		syscall.SIGPWR,
-		syscall.SIGQUIT,
-		syscall.SIGSTOP,
-		syscall.SIGTERM,
-	}...)
-	go func() {
-		sig := <-sigch
-		log.Println("govtil/net/server: Closing listen port", l.Addr().String(), "due to signal", sig)
-		l.Close()
-	}()
-
-	logginghandler := logginghandler.New(http.DefaultServeMux, log.NORMAL)
-	err = http.Serve(l, logginghandler)
+	// Serve
+	err = http.Serve(l, handler)
 	if err != nil {
 		if vnet.SocketClosed(err) {
 			err = nil // closed due to signal, no error

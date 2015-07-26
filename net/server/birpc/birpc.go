@@ -7,29 +7,41 @@ import (
 	"net"
 	"net/rpc"
 
-	"github.com/vsekhar/govtil/log"
-	"github.com/vsekhar/govtil/net/server/direct"
-	"github.com/vsekhar/govtil/net/muxconn"
+	"golang.org/x/net/websocket"
+
+	"github.com/vsekhar/govtil/net/multiplex"
 )
 
 func DispatchForever(connch <-chan net.Conn, srv *rpc.Server, clientch chan<- *rpc.Client) {
-	for conn := range connch {
-		muxed, err := muxconn.Split(conn, 2)
-		if err != nil {
-			log.Println("birpc: Failed to mux incoming connection from", conn.RemoteAddr().String(), "to", conn.LocalAddr().String(), ", dropping")
-			continue
+	for {
+		conn, more := <- connch
+		if !more {
+			return
 		}
-		// Server on first muxed conn, client on second
+		muxed := multiplex.Split(conn, 2)
 		go srv.ServeConn(muxed[0])
 		clientch <- rpc.NewClient(muxed[1])
 	}
 }
 
+func HTTPHandleFunc(srv *rpc.Server, cch chan<- *rpc.Client) websocket.Handler {
+	return websocket.Handler(func(c *websocket.Conn) {
+		muxed := multiplex.Split(c, 2)
+		go func() {
+			cch <- rpc.NewClient(muxed[1])
+		}()
+		srv.ServeConn(muxed[0])
+	})
+}
+
+// On the dialing side, Dial opens a socket to a listener, serves one end itself
+// and returns the other end as an rpc.Client.
 func Dial(url string, srv *rpc.Server) (client *rpc.Client, err error) {
-	conn, err := direct.Dial(url)
-	if err != nil { return }
-	muxed, err := muxconn.Split(conn, 2)
-	if err != nil { return }
+	conn, err := websocket.Dial(url, "", "http://localhost")
+	if err != nil {
+		return nil, err
+	}
+	muxed := multiplex.Split(conn, 2)
 
 	// Server on second, client on first (reverse of above)
 	client = rpc.NewClient(muxed[0])
