@@ -23,7 +23,7 @@ import (
 
 type loggingResponseWriter struct {
 	guid     guid.GUID
-	loglevel log.Level
+	loglevel int
 	http.ResponseWriter
 }
 
@@ -42,7 +42,7 @@ func (lh *loggingResponseWriter) Hijack() (c net.Conn, rw *bufio.ReadWriter, err
 }
 
 type loggingHandler struct {
-	loglevel log.Level
+	loglevel int
 	http.Handler
 }
 
@@ -62,6 +62,6 @@ func (lh *loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Create a new logging handler and log at the specified level (see govtil/log
 // for explanations of the log levels)
-func New(h http.Handler, loglevel log.Level) (lh http.Handler) {
+func New(h http.Handler, loglevel int) (lh http.Handler) {
 	return &loggingHandler{loglevel, h}
 }
