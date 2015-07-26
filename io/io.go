@@ -12,9 +12,8 @@ type rwc struct {
 func (this *rwc) Close() error {
 	ec := make(chan error)
 	go func() {
-		if err := this.ReadCloser.Close(); err != nil {
-			ec <- err
-		}
+		err := this.ReadCloser.Close();
+		ec <- err
 	}()
 
 	if err := this.WriteCloser.Close(); err != nil {
