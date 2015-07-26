@@ -13,18 +13,16 @@ import (
 )
 
 // Return whether the given error indicates a socket that produced it has been
-// closed by the other end
+// closed by the other end.
 //
-// Currently, SocketClosed() will return true if err:
-//	== io.EOF
-//	.Error() end in:
-//		"use of closed network connection"
-//		"broken pipe"
-//		"connection reset by peer"
+// Currently, SocketClosed() will return true for any of the following errors:
+// - io.EOF
+// - error string ending in "use of closed network connection"
+// - error string ending in "broken pipe"
+// - error string ending in "connection reset by peer"
 //
 // Eventually, SocketClosed() will replace the string comparisons with a test
 // for net.errClosing when/if it is made public
-//
 func SocketClosed(err error) bool {
 	if err == nil {
 		return false
