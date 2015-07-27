@@ -63,6 +63,14 @@ func init() {
 	http.HandleFunc("/gc", mem.GC)
 }
 
+func Handle(path string, h http.Handler) {
+	http.Handle(path, h)
+}
+
+func HandleFunc(path string, hf func(http.ResponseWriter, *http.Request)) {
+	http.HandleFunc(path, hf)
+}
+
 // Serve on a given port
 //
 // The server will log to the default logger and will gracefully terminate on
