@@ -34,11 +34,11 @@ var StreamzCh = make(chan []byte, 50)
 
 // RPC is an rpc.Server that handles connections received at the /birpc URL.
 // Use RPC.Register() to register method receivers.
-var RPC = rpc.NewServer()
+var BiRPC = rpc.NewServer()
 
 // RPCClientCh is a chan *rpc.Client from which RPC clients should be read.
 // These clients are produced by birpc from incoming connections.
-var RPCClientsCh = make(chan *rpc.Client, 50)
+var BiRPCClientsCh = make(chan *rpc.Client, 50)
 
 // A placeholder root request handler
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +49,7 @@ func init() {
 	http.Handle("/", http.HandlerFunc(defaultHandler))
 	http.Handle("/healthz", Healthz)
 	http.Handle("/varz", Varz)
-	http.Handle("/birpc", birpc.Handler(RPC, RPCClientsCh))
+	http.Handle("/birpc", birpc.Handler(BiRPC, BiRPCClientsCh))
 
 	killHandler := borkborkbork.New(syscall.SIGKILL)
 	intHandler := borkborkbork.New(syscall.SIGINT)
