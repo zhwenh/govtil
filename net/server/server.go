@@ -89,13 +89,15 @@ func HandleFunc(path string, hf func(http.ResponseWriter, *http.Request)) {
 func ServeForever(port int) error {
 	l, err := vnet.SignalListener(port)
 	if err != nil {
+		log.Errorf("govtil/net/server: failed to open port: %v", err)
 		return err
 	}
-	return serveListener(l)
+	return ServeListenerForever(l)
 }
 
-// for testing
-func serveListener(l net.Listener) error {
+// ServeListenerForever is the same as ServeForever except it uses the specified
+// listener. This is useful in testing when an ephemeral port should be used.
+func ServeListenerForever(l net.Listener) error {
 	// Wrap with logger
 	handler := logginghandler.New(http.DefaultServeMux, log.GetVerbosity())
 

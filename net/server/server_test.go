@@ -4,41 +4,27 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/vsekhar/govtil/log"
-	vnet "github.com/vsekhar/govtil/net"
+	vtest "github.com/vsekhar/govtil/testing"
 )
 
 func init() {
 	log.SetVerbosity(log.DEBUG)
 }
 
-// TODO: factor out server start/top (but in a way that allows for testing
+// TODO: factor out server start/stop (but in a way that allows for testing
 // signal stop, borkborkbork, etc.)
 func startServer(_ *testing.T) {
 
 }
 
 func TestServer(t *testing.T) {
-	l, err := vnet.SignalListener(0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, aps, err := net.SplitHostPort(l.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	port, err := strconv.Atoi(aps)
-	if err != nil {
-		t.Fatalf("failed to convert port string: %v, %v", aps, err)
-	}
-
+	l, port, err := vtest.LocalListener()
 	go func() {
-		if serveListener(l) != nil {
+		if ServeListenerForever(l) != nil {
 			t.Fatal(err)
 		}
 	}()

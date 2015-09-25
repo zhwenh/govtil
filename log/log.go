@@ -8,7 +8,7 @@ import (
 	stdlog "log"
 	"sync"
 
-	"github.com/vsekhar/govtil/testing"
+	"github.com/vsekhar/govtil/runtime"
 )
 
 var verbosity = flag.Int("verbosity", 0, "logging verbosity (-1==QUIET to 1==DEBUG)")
@@ -77,21 +77,21 @@ var stackBuf = make([]byte, 4096)
 func Stack(args ...interface{}) {
 	if test(DEBUG) {
 		stdlog.Print(args...)
-		stdlog.Print(testing.Stack())
+		stdlog.Print(runtime.Stack())
 	}
 }
 
 func Stackf(s string, args ...interface{}) {
 	if test(DEBUG) {
 		stdlog.Printf(s, args...)
-		stdlog.Print(testing.Stack())
+		stdlog.Print(runtime.Stack())
 	}
 }
 
 func Stackln(args ...interface{}) {
 	if test(DEBUG) {
 		stdlog.Println(args...)
-		stdlog.Print(testing.Stack())
+		stdlog.Print(runtime.Stack())
 	}
 }
 
