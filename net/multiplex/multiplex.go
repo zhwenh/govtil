@@ -46,5 +46,3 @@ func Split(c net.Conn, n uint) []net.Conn {
 	}
 	return r
 }
-
-var _ net.Conn = &muxConn{}
