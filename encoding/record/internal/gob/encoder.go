@@ -9,6 +9,7 @@ import (
 	"io"
 	"reflect"
 	"sync"
+	"sync/atomic"
 )
 
 // An Encoder manages the transmission of type and data information to the
@@ -21,6 +22,18 @@ type Encoder struct {
 	freeList   *encoderState           // list of free encoderStates; avoids reallocation
 	byteBuf    encBuffer               // buffer for top-level encoderState
 	err        error
+
+	// Added for govtil/encoding/record
+	idToType           map[typeId]gobType
+	types              map[reflect.Type]gobType
+	nextId             typeId
+
+	// typeInfoMap is an atomic pointer to map[reflect.Type]*typeInfo. It's
+	// updated copy-on-write. Readers just do an atomic load to get the current
+	// version of the map. Writers make a full copy of the map and atomically
+	// update the pointer to point to the new map. Under heavy read contention,
+	// this is significantly faster than a map protected by a mutex.
+	typeInfoMap        atomic.Value
 }
 
 // Before we encode a message, we reserve space at the head of the
@@ -35,6 +48,49 @@ func NewEncoder(w io.Writer) *Encoder {
 	enc.w = []io.Writer{w}
 	enc.sent = make(map[reflect.Type]typeId)
 	enc.countState = enc.newEncoderState(new(encBuffer))
+
+	// Added for govtil/encoding/record
+	enc.idToType = make(map[typeId]gobType)
+	m := make(map[reflect.Type]*typeInfo)
+	enc.typeInfoMap.Store(m)
+	enc.types = make(map[reflect.Type]gobType)
+	enc.nextId = 0
+
+	// Primordial types, needed during initialization.
+	// Always passed as pointers so the interface{} type
+	// goes through without losing its interfaceness.
+	enc.bootstrapType("bool", (*bool)(nil), 1)
+	enc.bootstrapType("int", (*int)(nil), 2)
+	enc.bootstrapType("uint", (*uint)(nil), 3)
+	enc.bootstrapType("float", (*float64)(nil), 4)
+	enc.bootstrapType("bytes", (*[]byte)(nil), 5)
+	enc.bootstrapType("string", (*string)(nil), 6)
+	enc.bootstrapType("complex", (*complex128)(nil), 7)
+	enc.bootstrapType("interface", (*interface{})(nil), 8)
+	// Reserve some Ids for compatible expansion
+	enc.bootstrapType("_reserved1", (*struct{ r7 int })(nil), 9)
+	enc.bootstrapType("_reserved1", (*struct{ r6 int })(nil), 10)
+	enc.bootstrapType("_reserved1", (*struct{ r5 int })(nil), 11)
+	enc.bootstrapType("_reserved1", (*struct{ r4 int })(nil), 12)
+	enc.bootstrapType("_reserved1", (*struct{ r3 int })(nil), 13)
+	enc.bootstrapType("_reserved1", (*struct{ r2 int })(nil), 14)
+	enc.bootstrapType("_reserved1", (*struct{ r1 int })(nil), 15)
+
+	// Some magic numbers to make sure there are no surprises.
+	// checkId(16, tWireType)
+	enc.checkId(16, enc.mustGetTypeInfo(reflect.TypeOf(wireType{})).id)
+	enc.checkId(17, enc.mustGetTypeInfo(reflect.TypeOf(arrayType{})).id)
+	enc.checkId(18, enc.mustGetTypeInfo(reflect.TypeOf(CommonType{})).id)
+	enc.checkId(19, enc.mustGetTypeInfo(reflect.TypeOf(sliceType{})).id)
+	enc.checkId(20, enc.mustGetTypeInfo(reflect.TypeOf(structType{})).id)
+	enc.checkId(21, enc.mustGetTypeInfo(reflect.TypeOf(fieldType{})).id)
+	// go1.5.1/encoding/gob skips 22
+	enc.checkId(23, enc.mustGetTypeInfo(reflect.TypeOf(mapType{})).id)
+
+
+	enc.nextId = firstUserId
+	enc.registerBasics()
+
 	return enc
 }
 
@@ -93,7 +149,7 @@ func (enc *Encoder) sendActualType(w io.Writer, state *encoderState, ut *userTyp
 	if _, alreadySent := enc.sent[actual]; alreadySent {
 		return false
 	}
-	info, err := getTypeInfo(ut)
+	info, err := enc.getTypeInfo(ut)
 	if err != nil {
 		enc.setError(err)
 		return
@@ -194,7 +250,7 @@ func (enc *Encoder) sendTypeDescriptor(w io.Writer, state *encoderState, ut *use
 		// a singleton basic type (int, []byte etc.) at top level.  We don't
 		// need to send the type info but we do need to update enc.sent.
 		if !sent {
-			info, err := getTypeInfo(ut)
+			info, err := enc.getTypeInfo(ut)
 			if err != nil {
 				enc.setError(err)
 				return

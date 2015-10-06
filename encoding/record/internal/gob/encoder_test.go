@@ -443,8 +443,9 @@ func (this *interfaceIndirectTestT) F() bool {
 // slice of interfaces.  The issue was registering *T caused T to be
 // stored as the concrete type.
 func TestInterfaceIndirect(t *testing.T) {
-	Register(&interfaceIndirectTestT{})
 	b := new(bytes.Buffer)
+	enc := NewEncoder(b)
+	enc.Register(&interfaceIndirectTestT{})
 	w := []interfaceIndirectTestI{&interfaceIndirectTestT{}}
 	err := NewEncoder(b).Encode(w)
 	if err != nil {
@@ -495,10 +496,10 @@ var ignoreTests = []ignoreTest{
 }
 
 func TestDecodeIntoNothing(t *testing.T) {
-	Register(new(NewType0))
 	for i, test := range ignoreTests {
 		b := new(bytes.Buffer)
 		enc := NewEncoder(b)
+		enc.Register(new(NewType0))
 		err := enc.Encode(test.in)
 		if err != nil {
 			t.Errorf("%d: encode error %s:", i, err)
@@ -564,8 +565,8 @@ func TestNestedInterfaces(t *testing.T) {
 	var buf bytes.Buffer
 	e := NewEncoder(&buf)
 	d := NewDecoder(&buf)
-	Register(new(Bug0Outer))
-	Register(new(Bug0Inner))
+	e.Register(new(Bug0Outer))
+	e.Register(new(Bug0Inner))
 	f := &Bug0Outer{&Bug0Outer{&Bug0Inner{7}}}
 	var v interface{} = f
 	err := e.Encode(&v)
@@ -812,13 +813,14 @@ func TestGobPtrSlices(t *testing.T) {
 // getDecEnginePtr cached engine for ut.base instead of ut.user so we passed
 // a *map and then tried to reuse its engine to decode the inner map.
 func TestPtrToMapOfMap(t *testing.T) {
-	Register(make(map[string]interface{}))
 	subdata := make(map[string]interface{})
 	subdata["bar"] = "baz"
 	data := make(map[string]interface{})
 	data["foo"] = subdata
 
 	b := new(bytes.Buffer)
+	enc := NewEncoder(b)
+	enc.Register(make(map[string]interface{}))
 	err := NewEncoder(b).Encode(data)
 	if err != nil {
 		t.Fatal("encode:", err)
@@ -919,13 +921,14 @@ type Z struct {
 }
 
 func Test29ElementSlice(t *testing.T) {
-	Register(Z{})
 	src := make([]interface{}, 100) // Size needs to be bigger than size of type definition.
 	for i := range src {
 		src[i] = Z{}
 	}
 	buf := new(bytes.Buffer)
-	err := NewEncoder(buf).Encode(src)
+	enc := NewEncoder(buf)
+	enc.Register(Z{})
+	err := enc.Encode(src)
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 		return

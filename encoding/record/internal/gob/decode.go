@@ -870,6 +870,7 @@ func (dec *Decoder) decIgnoreOpFor(wireId typeId, inProgress map[typeId]*decOp) 
 		return opPtr
 	}
 	op, ok := decIgnoreOpMap[wireId]
+	wire := dec.wireType[wireId]
 	if !ok {
 		inProgress[wireId] = &op
 		if wireId == tInterface {
@@ -881,10 +882,9 @@ func (dec *Decoder) decIgnoreOpFor(wireId typeId, inProgress map[typeId]*decOp) 
 			return &op
 		}
 		// Special cases
-		wire := dec.wireType[wireId]
 		switch {
 		case wire == nil:
-			errorf("bad data: undefined type %s", wireId.string())
+			errorf("bad data: undefined type %s", wire.string())
 		case wire.ArrayT != nil:
 			elemId := wire.ArrayT.Elem
 			elemOp := dec.decIgnoreOpFor(elemId, inProgress)
@@ -926,7 +926,7 @@ func (dec *Decoder) decIgnoreOpFor(wireId typeId, inProgress map[typeId]*decOp) 
 		}
 	}
 	if op == nil {
-		errorf("bad data: ignore can't handle type %s", wireId.string())
+		errorf("bad data: ignore can't handle type %s", wire.string())
 	}
 	return &op
 }
@@ -1029,10 +1029,6 @@ func (dec *Decoder) compatibleType(fr reflect.Type, fw typeId, inProgress map[re
 
 // typeString returns a human-readable description of the type identified by remoteId.
 func (dec *Decoder) typeString(remoteId typeId) string {
-	if t := idToType[remoteId]; t != nil {
-		// globally known type.
-		return t.string()
-	}
 	return dec.wireType[remoteId].string()
 }
 

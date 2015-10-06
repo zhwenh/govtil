@@ -27,6 +27,7 @@ func benchmarkEndToEnd(b *testing.B, ctor func() interface{}, pipe func() (r io.
 		}
 		v := ctor()
 		enc := NewEncoder(w)
+		enc.Register(v)
 		dec := NewDecoder(r)
 		for pb.Next() {
 			if err := enc.Encode(v); err != nil {
@@ -60,7 +61,6 @@ func BenchmarkEndToEndByteBuffer(b *testing.B) {
 func BenchmarkEndToEndSliceByteBuffer(b *testing.B) {
 	benchmarkEndToEnd(b, func() interface{} {
 		v := &Bench{7, 3.2, "now is the time", nil}
-		Register(v)
 		arr := make([]interface{}, 100)
 		for i := range arr {
 			arr[i] = v

@@ -1104,10 +1104,11 @@ func TestInterface(t *testing.T) {
 	b := new(bytes.Buffer)
 	item1 := &InterfaceItem{1, iVal, fVal, vVal, 11.5, []Squarer{iVal, fVal, nil, vVal}}
 	// Register the types.
-	Register(Int(0))
-	Register(Float(0))
-	Register(Vector{})
-	err := NewEncoder(b).Encode(item1)
+	enc := NewEncoder(b)
+	enc.Register(Int(0))
+	enc.Register(Float(0))
+	enc.Register(Vector{})
+	err := enc.Encode(item1)
 	if err != nil {
 		t.Error("expected no encode error; got", err)
 	}
@@ -1210,8 +1211,9 @@ func TestInterfacePointer(t *testing.T) {
 		&str2,
 	}
 	// Register the type.
-	Register(str2)
-	err := NewEncoder(b).Encode(item1)
+	enc := NewEncoder(b)
+	enc.Register(str2)
+	err := enc.Encode(item1)
 	if err != nil {
 		t.Error("expected no encode error; got", err)
 	}
@@ -1239,10 +1241,11 @@ func TestIgnoreInterface(t *testing.T) {
 	b := new(bytes.Buffer)
 	item1 := &InterfaceItem{1, iVal, fVal, pVal, 11.5, nil}
 	// Register the types.
-	Register(Int(0))
-	Register(Float(0))
-	Register(Point{})
-	err := NewEncoder(b).Encode(item1)
+	enc := NewEncoder(b)
+	enc.Register(Int(0))
+	enc.Register(Float(0))
+	enc.Register(Point{})
+	err := enc.Encode(item1)
 	if err != nil {
 		t.Error("expected no encode error; got", err)
 	}
@@ -1351,10 +1354,11 @@ func TestDebugStruct(t *testing.T) {
 	if debugFunc == nil {
 		return
 	}
-	Register(OnTheFly{})
-	dt := newDT()
 	b := new(bytes.Buffer)
-	err := NewEncoder(b).Encode(dt)
+	enc := NewEncoder(b)
+	enc.Register(OnTheFly{})
+	dt := newDT()
+	err := enc.Encode(dt)
 	if err != nil {
 		t.Fatal("encode:", err)
 	}
@@ -1437,9 +1441,10 @@ func testFuzz(t *testing.T, seed int64, n int, input ...interface{}) {
 // and checks that no panic occurs.
 func TestFuzzOneByte(t *testing.T) {
 	buf := new(bytes.Buffer)
-	Register(OnTheFly{})
+	enc := NewEncoder(buf)
+	enc.Register(OnTheFly{})
 	dt := newDT()
-	if err := NewEncoder(buf).Encode(dt); err != nil {
+	if err := enc.Encode(dt); err != nil {
 		t.Fatal(err)
 	}
 	s := buf.String()
