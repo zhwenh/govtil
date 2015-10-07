@@ -1,4 +1,4 @@
-// 
+// Package record provides for record-based serialization of types.
 package record
 
 import (
