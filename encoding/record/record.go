@@ -30,11 +30,18 @@ func NewEncoder(w io.Writer, e interface{}) *encoder {
 // used when creating the Encoder, otherwise an error is returned and no data is
 // written to the stream.
 func (enc *encoder) Encode(e interface{}) error {
+	return enc.EncodeValue(reflect.ValueOf(e))
+}
+
+// Encode serializes the given value. The parameter's type must match the type
+// used when creating the Encoder, otherwise an error is returned and no data is
+// written to the stream.
+func (enc *encoder) EncodeValue(v reflect.Value) error {
 	// types must match exactly
-	if reflect.TypeOf(e) != enc.rtype {
-		return fmt.Errorf("type mismatch: %s and %s", reflect.TypeOf(e).Name(), enc.rtype.Name())
+	if v.Type() != enc.rtype {
+		return fmt.Errorf("type mismatch: %s and %s", v.Type().Name(), enc.rtype.Name())
 	}
-	return enc.genc.StrictEncode(e)
+	return enc.genc.StrictEncodeValue(v)
 }
 
 // Decoding a record does not perform any typechecking. This is a "fail-open"
