@@ -9,14 +9,19 @@ type notRegistered struct {
 	dontRegisterMe int
 }
 
+type t1 struct {
+	I int
+}
+
 func TestEncoder(t *testing.T) {
-	var i int
+	s1 := new(t1)
+	s1.I = 7
 	b := new(bytes.Buffer)
-	enc := NewEncoder(b, i)
+	enc := NewEncoder(b, s1)
 	if err := enc.Encode(notRegistered{}); err == nil {
 		t.Error("expected error encoding unregistered type")
 	}
-	if err := enc.Encode(i); err != nil {
+	if err := enc.Encode(s1); err != nil {
 		t.Fatal(err)
 	}
 	if err := enc.Encode(notRegistered{}); err == nil {
@@ -25,18 +30,19 @@ func TestEncoder(t *testing.T) {
 }
 
 func TestEncodeDecode(t *testing.T) {
-	var i int = 7
+	s1 := new(t1)
+	s1.I = 9
 	b := new(bytes.Buffer)
-	enc := NewEncoder(b, i)
-	if err := enc.Encode(i); err != nil {
+	enc := NewEncoder(b, s1)
+	if err := enc.Encode(s1); err != nil {
 		t.Fatal(err)
 	}
 	dec := NewDecoder(b)
-	var ri int
-	if err := dec.Decode(&ri); err != nil {
+	r1 := new(t1)
+	if err := dec.Decode(&r1); err != nil {
 		t.Fatal(err)
 	}
-	if ri != i {
+	if *r1 != *s1 {
 		t.Error("values do not match")
 	}
 }
